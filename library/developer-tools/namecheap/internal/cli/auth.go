@@ -59,9 +59,11 @@ func newAuthStatusCmd(flags *rootFlags) *cobra.Command {
 			if !authed {
 				fmt.Fprintln(w, red("Not authenticated"))
 				fmt.Fprintln(w, "")
-				fmt.Fprintln(w, "Set your token:")
-				// PATCH(namecheap-api-key-env): point users at the env var config.Load actually reads.
+				fmt.Fprintln(w, "Set your username and token:")
+				// PATCH(namecheap-auth-env-hint): Namecheap auth requires both username and API key.
+				fmt.Fprintln(w, "  export NAMECHEAP_USERNAME=\"your-username-here\"")
 				fmt.Fprintln(w, "  export NAMECHEAP_API_KEY=\"your-token-here\"")
+				fmt.Fprintln(w, "  # auth set-token stores only NAMECHEAP_API_KEY; username must be set separately")
 				fmt.Fprintf(w, "  namecheap-pp-cli auth set-token <token>\n")
 				return authErr(fmt.Errorf("no credentials configured"))
 			}

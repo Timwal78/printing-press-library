@@ -11,40 +11,41 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newXmlResponseDomainsCheckCmd(flags *rootFlags) *cobra.Command {
-	var flagDomainList string
+func newUsersGetBalancesCmd(flags *rootFlags) *cobra.Command {
 
 	cmd := &cobra.Command{
-		Use:         "domains-check",
-		Aliases:     []string{"list"},
-		Short:       "Check domain availability for one or more domains.",
-		Example:     "  namecheap-pp-cli xml-response domains-check",
-		Annotations: map[string]string{"pp:endpoint": "xml-response.domains-check", "pp:method": "GET", "pp:path": "/xml.response/domains/check", "mcp:read-only": "true"},
+		Use:         "get-balances",
+		Short:       "Runs `namecheap.users.getBalances`.",
+		Example:     "  namecheap-pp-cli users get-balances",
+		Annotations: map[string]string{"pp:endpoint": "users.get-balances", "pp:method": "GET", "pp:path": "/users/get-balances", "mcp:read-only": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, err := flags.newClient()
 			if err != nil {
 				return err
 			}
 
-			path := "/xml.response/domains/check"
+			path := "/users/get-balances"
 			params := map[string]string{}
-			if flagDomainList != "" {
-				params["DomainList"] = fmt.Sprintf("%v", flagDomainList)
-			}
-			data, prov, err := resolveRead(cmd.Context(), c, flags, "xml-response", false, path, params, nil)
+			data, prov, err := resolveRead(cmd.Context(), c, flags, "users", false, path, params, nil)
 			if err != nil {
 				return classifyAPIError(err, flags)
 			}
-			// Print provenance to stderr for human-facing output
-			{
+			// Print provenance to stderr for human-facing output only.
+			// Machine-format flags (--json, --csv, --compact, --quiet, --plain,
+			// --select) and piped stdout suppress this line; the JSON envelope
+			// already carries meta.source for those consumers.
+			// SYNC: keep this gate aligned with command_promoted.go.tmpl.
+			if wantsHumanTable(cmd.OutOrStdout(), flags) {
 				var countItems []json.RawMessage
 				_ = json.Unmarshal(data, &countItems)
 				printProvenance(cmd, len(countItems), prov)
 			}
 			// For JSON output, wrap with provenance envelope before passing through flags.
 			// --select wins over --compact when both are set; --compact only runs when
-			// no explicit fields were requested.
-			if flags.asJSON || !isTerminal(cmd.OutOrStdout()) {
+			// no explicit fields were requested. Explicit format flags (--csv, --quiet,
+			// --plain) opt out of the auto-JSON path so piped consumers that asked for
+			// a non-JSON format reach the standard pipeline below.
+			if flags.asJSON || (!isTerminal(cmd.OutOrStdout()) && !flags.csv && !flags.quiet && !flags.plain) {
 				filtered := data
 				if flags.selectFields != "" {
 					filtered = filterFields(filtered, flags.selectFields)
@@ -73,7 +74,6 @@ func newXmlResponseDomainsCheckCmd(flags *rootFlags) *cobra.Command {
 			return printOutputWithFlags(cmd.OutOrStdout(), data, flags)
 		},
 	}
-	cmd.Flags().StringVar(&flagDomainList, "domain-list", "", "Comma-separated list of domains (maximum 50 for domains.check).")
 
 	return cmd
 }

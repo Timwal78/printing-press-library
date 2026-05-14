@@ -137,8 +137,8 @@ func newDoctorCmd(flags *rootFlags) *cobra.Command {
 				if clientErr != nil {
 					report["api"] = fmt.Sprintf("client init error: %s", clientErr)
 				} else {
-					// Step 1: Basic reachability via the configured transport.
-					reachBody, reachErr := c.Get("/", nil)
+					// Step 1: Namecheap has no unauthenticated root health endpoint; use the safe balances read.
+					reachBody, reachErr := c.Get("/users/get-balances", nil)
 					var reachAPIErr *client.APIError
 					switch {
 					case reachErr == nil:
@@ -174,7 +174,7 @@ func newDoctorCmd(flags *rootFlags) *cobra.Command {
 					} else if reachErr != nil && !errors.As(reachErr, &reachAPIErr) {
 						report["credentials"] = "skipped (API unreachable)"
 					} else {
-						_, authErr := c.Get("/xml.response/users/get-balances", nil)
+						_, authErr := c.Get("/users/get-balances", nil)
 						var authAPIErr *client.APIError
 						var namecheapAPIErr *client.NamecheapAPIError
 						switch {

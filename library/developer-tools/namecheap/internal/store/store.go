@@ -54,6 +54,10 @@ func Open(dbPath string) (*Store, error) {
 	return OpenWithContext(context.Background(), dbPath)
 }
 
+func OpenReadOnly(dbPath string) (*Store, error) {
+	return OpenWithContext(context.Background(), dbPath)
+}
+
 // OpenWithContext opens or creates the SQLite store at dbPath. The
 // context is honored by the migration path: cancellation interrupts the
 // retry-on-SQLITE_BUSY loop and propagates ctx.Err() back to the caller

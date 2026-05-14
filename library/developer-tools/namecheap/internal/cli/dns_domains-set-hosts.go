@@ -11,22 +11,22 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newXmlResponseDomainsDnsGetListCmd(flags *rootFlags) *cobra.Command {
+func newDnsDomainsSetHostsCmd(flags *rootFlags) *cobra.Command {
 	var flagSLD string
 	var flagTLD string
 
 	cmd := &cobra.Command{
-		Use:         "domains-dns-get-list",
-		Short:       "Get DNS nameserver type and nameservers.",
-		Example:     "  namecheap-pp-cli xml-response domains-dns-get-list",
-		Annotations: map[string]string{"pp:endpoint": "xml-response.domains-dns-get-list", "pp:method": "GET", "pp:path": "/xml.response/dns/get-list", "mcp:read-only": "true"},
+		Use:         "domains-set-hosts",
+		Short:       "Runs `namecheap.domains.dns.setHosts`; HostName1/RecordType1/Address1/TTL1 style parameters can be passed via...",
+		Example:     "  namecheap-pp-cli dns domains-set-hosts",
+		Annotations: map[string]string{"pp:endpoint": "dns.domains-set-hosts", "pp:method": "GET", "pp:path": "/dns/set-hosts", "mcp:read-only": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, err := flags.newClient()
 			if err != nil {
 				return err
 			}
 
-			path := "/xml.response/dns/get-list"
+			path := "/dns/set-hosts"
 			params := map[string]string{}
 			if flagSLD != "" {
 				params["SLD"] = fmt.Sprintf("%v", flagSLD)
@@ -34,20 +34,26 @@ func newXmlResponseDomainsDnsGetListCmd(flags *rootFlags) *cobra.Command {
 			if flagTLD != "" {
 				params["TLD"] = fmt.Sprintf("%v", flagTLD)
 			}
-			data, prov, err := resolveRead(cmd.Context(), c, flags, "xml-response", false, path, params, nil)
+			data, prov, err := resolveRead(cmd.Context(), c, flags, "dns", false, path, params, nil)
 			if err != nil {
 				return classifyAPIError(err, flags)
 			}
-			// Print provenance to stderr for human-facing output
-			{
+			// Print provenance to stderr for human-facing output only.
+			// Machine-format flags (--json, --csv, --compact, --quiet, --plain,
+			// --select) and piped stdout suppress this line; the JSON envelope
+			// already carries meta.source for those consumers.
+			// SYNC: keep this gate aligned with command_promoted.go.tmpl.
+			if wantsHumanTable(cmd.OutOrStdout(), flags) {
 				var countItems []json.RawMessage
 				_ = json.Unmarshal(data, &countItems)
 				printProvenance(cmd, len(countItems), prov)
 			}
 			// For JSON output, wrap with provenance envelope before passing through flags.
 			// --select wins over --compact when both are set; --compact only runs when
-			// no explicit fields were requested.
-			if flags.asJSON || !isTerminal(cmd.OutOrStdout()) {
+			// no explicit fields were requested. Explicit format flags (--csv, --quiet,
+			// --plain) opt out of the auto-JSON path so piped consumers that asked for
+			// a non-JSON format reach the standard pipeline below.
+			if flags.asJSON || (!isTerminal(cmd.OutOrStdout()) && !flags.csv && !flags.quiet && !flags.plain) {
 				filtered := data
 				if flags.selectFields != "" {
 					filtered = filterFields(filtered, flags.selectFields)

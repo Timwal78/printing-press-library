@@ -25,19 +25,83 @@ import (
 // RegisterTools registers all API operations as MCP tools.
 func RegisterTools(s *server.MCPServer) {
 	s.AddTool(
-		mcplib.NewTool("xml-response_domains-check",
-			mcplib.WithToolAnnotation(mcplib.ToolAnnotation{}),
+		mcplib.NewTool("dns_domains-get-email-forwarding",
+			mcplib.WithDescription("Runs `namecheap.domains.dns.getEmailForwarding`. Optional: DomainName."),
+			mcplib.WithString("DomainName", mcplib.Description("Fully qualified domain name.")),
+			mcplib.WithReadOnlyHintAnnotation(true),
+			mcplib.WithDestructiveHintAnnotation(false),
+			mcplib.WithOpenWorldHintAnnotation(true),
+		),
+		makeAPIHandler("GET", "/dns/get-email-forwarding", []mcpParamBinding{{PublicName: "DomainName", WireName: "DomainName", Location: "query"}}, []string{}),
+	)
+	s.AddTool(
+		mcplib.NewTool("dns_domains-get-hosts",
+			mcplib.WithDescription("Runs `namecheap.domains.dns.getHosts`. Optional: SLD, TLD."),
+			mcplib.WithString("SLD", mcplib.Description("Second-level domain, without the TLD.")),
+			mcplib.WithString("TLD", mcplib.Description("Top-level domain without the leading dot.")),
+			mcplib.WithReadOnlyHintAnnotation(true),
+			mcplib.WithDestructiveHintAnnotation(false),
+			mcplib.WithOpenWorldHintAnnotation(true),
+		),
+		makeAPIHandler("GET", "/dns/get-hosts", []mcpParamBinding{{PublicName: "SLD", WireName: "SLD", Location: "query"}, {PublicName: "TLD", WireName: "TLD", Location: "query"}}, []string{}),
+	)
+	s.AddTool(
+		mcplib.NewTool("dns_domains-get-list",
+			mcplib.WithDescription("Get DNS nameserver type and nameservers. Optional: SLD, TLD."),
+			mcplib.WithString("SLD", mcplib.Description("Second-level domain, without the TLD.")),
+			mcplib.WithString("TLD", mcplib.Description("Top-level domain without the leading dot.")),
+			mcplib.WithReadOnlyHintAnnotation(true),
+			mcplib.WithDestructiveHintAnnotation(false),
+			mcplib.WithOpenWorldHintAnnotation(true),
+		),
+		makeAPIHandler("GET", "/dns/get-list", []mcpParamBinding{{PublicName: "SLD", WireName: "SLD", Location: "query"}, {PublicName: "TLD", WireName: "TLD", Location: "query"}}, []string{}),
+	)
+	s.AddTool(
+		mcplib.NewTool("dns_domains-set-custom",
+			mcplib.WithDescription("Runs `namecheap.domains.dns.setCustom`. Optional: SLD, TLD, Nameservers."),
+			mcplib.WithString("SLD", mcplib.Description("Second-level domain, without the TLD.")),
+			mcplib.WithString("TLD", mcplib.Description("Top-level domain without the leading dot.")),
+			mcplib.WithString("Nameservers", mcplib.Description("Nameservers")),
+			mcplib.WithReadOnlyHintAnnotation(true),
+			mcplib.WithDestructiveHintAnnotation(false),
+			mcplib.WithOpenWorldHintAnnotation(true),
+		),
+		makeAPIHandler("GET", "/dns/set-custom", []mcpParamBinding{{PublicName: "SLD", WireName: "SLD", Location: "query"}, {PublicName: "TLD", WireName: "TLD", Location: "query"}, {PublicName: "Nameservers", WireName: "Nameservers", Location: "query"}}, []string{}),
+	)
+	s.AddTool(
+		mcplib.NewTool("dns_domains-set-default",
+			mcplib.WithDescription("Switch a domain to Namecheap default DNS. Optional: SLD, TLD."),
+			mcplib.WithString("SLD", mcplib.Description("Second-level domain, without the TLD.")),
+			mcplib.WithString("TLD", mcplib.Description("Top-level domain without the leading dot.")),
+			mcplib.WithReadOnlyHintAnnotation(true),
+			mcplib.WithDestructiveHintAnnotation(false),
+			mcplib.WithOpenWorldHintAnnotation(true),
+		),
+		makeAPIHandler("GET", "/dns/set-default", []mcpParamBinding{{PublicName: "SLD", WireName: "SLD", Location: "query"}, {PublicName: "TLD", WireName: "TLD", Location: "query"}}, []string{}),
+	)
+	s.AddTool(
+		mcplib.NewTool("dns_domains-set-hosts",
+			mcplib.WithDescription("Runs `namecheap.domains.dns.setHosts`; HostName1/RecordType1/Address1/TTL1 style parameters can be passed via --param-json in the patched CLI. Optional: SLD, TLD."),
+			mcplib.WithString("SLD", mcplib.Description("Second-level domain, without the TLD.")),
+			mcplib.WithString("TLD", mcplib.Description("Top-level domain without the leading dot.")),
+			mcplib.WithReadOnlyHintAnnotation(true),
+			mcplib.WithDestructiveHintAnnotation(false),
+			mcplib.WithOpenWorldHintAnnotation(true),
+		),
+		makeAPIHandler("GET", "/dns/set-hosts", []mcpParamBinding{{PublicName: "SLD", WireName: "SLD", Location: "query"}, {PublicName: "TLD", WireName: "TLD", Location: "query"}}, []string{}),
+	)
+	s.AddTool(
+		mcplib.NewTool("domains_check",
 			mcplib.WithDescription("Check domain availability for one or more domains. Optional: DomainList."),
 			mcplib.WithString("DomainList", mcplib.Description("Comma-separated list of domains (maximum 50 for domains.check).")),
 			mcplib.WithReadOnlyHintAnnotation(true),
 			mcplib.WithDestructiveHintAnnotation(false),
 			mcplib.WithOpenWorldHintAnnotation(true),
 		),
-		makeAPIHandler("GET", "/xml.response/domains/check", []string{}),
+		makeAPIHandler("GET", "/domains/check", []mcpParamBinding{{PublicName: "DomainList", WireName: "DomainList", Location: "query"}}, []string{}),
 	)
 	s.AddTool(
-		mcplib.NewTool("xml-response_domains-create",
-			mcplib.WithToolAnnotation(mcplib.ToolAnnotation{}),
+		mcplib.NewTool("domains_create",
 			mcplib.WithDescription("Runs `namecheap.domains.create`. This is a mutating paid operation; use dry-run unless intentionally registering. Optional: DomainName, Years, PromotionCode (plus 3 more)."),
 			mcplib.WithString("DomainName", mcplib.Description("Fully qualified domain name.")),
 			mcplib.WithString("Years", mcplib.Description("Years")),
@@ -49,105 +113,30 @@ func RegisterTools(s *server.MCPServer) {
 			mcplib.WithDestructiveHintAnnotation(false),
 			mcplib.WithOpenWorldHintAnnotation(true),
 		),
-		makeAPIHandler("GET", "/xml.response/domains/create", []string{}),
+		makeAPIHandler("GET", "/domains/create", []mcpParamBinding{{PublicName: "DomainName", WireName: "DomainName", Location: "query"}, {PublicName: "Years", WireName: "Years", Location: "query"}, {PublicName: "PromotionCode", WireName: "PromotionCode", Location: "query"}, {PublicName: "AddFreeWhoisguard", WireName: "AddFreeWhoisguard", Location: "query"}, {PublicName: "WGEnabled", WireName: "WGEnabled", Location: "query"}, {PublicName: "Nameservers", WireName: "Nameservers", Location: "query"}}, []string{}),
 	)
 	s.AddTool(
-		mcplib.NewTool("xml-response_domains-dns-get-email-forwarding",
-			mcplib.WithToolAnnotation(mcplib.ToolAnnotation{}),
-			mcplib.WithDescription("Runs `namecheap.domains.dns.getEmailForwarding`. Optional: DomainName."),
-			mcplib.WithString("DomainName", mcplib.Description("Fully qualified domain name.")),
-			mcplib.WithReadOnlyHintAnnotation(true),
-			mcplib.WithDestructiveHintAnnotation(false),
-			mcplib.WithOpenWorldHintAnnotation(true),
-		),
-		makeAPIHandler("GET", "/xml.response/dns/get-email-forwarding", []string{}),
-	)
-	s.AddTool(
-		mcplib.NewTool("xml-response_domains-dns-get-hosts",
-			mcplib.WithToolAnnotation(mcplib.ToolAnnotation{}),
-			mcplib.WithDescription("Runs `namecheap.domains.dns.getHosts`. Optional: SLD, TLD."),
-			mcplib.WithString("SLD", mcplib.Description("Second-level domain, without the TLD.")),
-			mcplib.WithString("TLD", mcplib.Description("Top-level domain without the leading dot.")),
-			mcplib.WithReadOnlyHintAnnotation(true),
-			mcplib.WithDestructiveHintAnnotation(false),
-			mcplib.WithOpenWorldHintAnnotation(true),
-		),
-		makeAPIHandler("GET", "/xml.response/dns/get-hosts", []string{}),
-	)
-	s.AddTool(
-		mcplib.NewTool("xml-response_domains-dns-get-list",
-			mcplib.WithToolAnnotation(mcplib.ToolAnnotation{}),
-			mcplib.WithDescription("Get DNS nameserver type and nameservers. Optional: SLD, TLD."),
-			mcplib.WithString("SLD", mcplib.Description("Second-level domain, without the TLD.")),
-			mcplib.WithString("TLD", mcplib.Description("Top-level domain without the leading dot.")),
-			mcplib.WithReadOnlyHintAnnotation(true),
-			mcplib.WithDestructiveHintAnnotation(false),
-			mcplib.WithOpenWorldHintAnnotation(true),
-		),
-		makeAPIHandler("GET", "/xml.response/dns/get-list", []string{}),
-	)
-	s.AddTool(
-		mcplib.NewTool("xml-response_domains-dns-set-custom",
-			mcplib.WithToolAnnotation(mcplib.ToolAnnotation{}),
-			mcplib.WithDescription("Runs `namecheap.domains.dns.setCustom`. Optional: SLD, TLD, Nameservers."),
-			mcplib.WithString("SLD", mcplib.Description("Second-level domain, without the TLD.")),
-			mcplib.WithString("TLD", mcplib.Description("Top-level domain without the leading dot.")),
-			mcplib.WithString("Nameservers", mcplib.Description("Nameservers")),
-			mcplib.WithReadOnlyHintAnnotation(true),
-			mcplib.WithDestructiveHintAnnotation(false),
-			mcplib.WithOpenWorldHintAnnotation(true),
-		),
-		makeAPIHandler("GET", "/xml.response/dns/set-custom", []string{}),
-	)
-	s.AddTool(
-		mcplib.NewTool("xml-response_domains-dns-set-default",
-			mcplib.WithToolAnnotation(mcplib.ToolAnnotation{}),
-			mcplib.WithDescription("Switch a domain to Namecheap default DNS. Optional: SLD, TLD."),
-			mcplib.WithString("SLD", mcplib.Description("Second-level domain, without the TLD.")),
-			mcplib.WithString("TLD", mcplib.Description("Top-level domain without the leading dot.")),
-			mcplib.WithReadOnlyHintAnnotation(true),
-			mcplib.WithDestructiveHintAnnotation(false),
-			mcplib.WithOpenWorldHintAnnotation(true),
-		),
-		makeAPIHandler("GET", "/xml.response/dns/set-default", []string{}),
-	)
-	s.AddTool(
-		mcplib.NewTool("xml-response_domains-dns-set-hosts",
-			mcplib.WithToolAnnotation(mcplib.ToolAnnotation{}),
-			mcplib.WithDescription("Runs `namecheap.domains.dns.setHosts`; HostName1/RecordType1/Address1/TTL1 style parameters can be passed via --param-json in the patched CLI. Optional: SLD, TLD."),
-			mcplib.WithString("SLD", mcplib.Description("Second-level domain, without the TLD.")),
-			mcplib.WithString("TLD", mcplib.Description("Top-level domain without the leading dot.")),
-			mcplib.WithReadOnlyHintAnnotation(true),
-			mcplib.WithDestructiveHintAnnotation(false),
-			mcplib.WithOpenWorldHintAnnotation(true),
-		),
-		makeAPIHandler("GET", "/xml.response/dns/set-hosts", []string{}),
-	)
-	s.AddTool(
-		mcplib.NewTool("xml-response_domains-get-contacts",
-			mcplib.WithToolAnnotation(mcplib.ToolAnnotation{}),
+		mcplib.NewTool("domains_get-contacts",
 			mcplib.WithDescription("Runs `namecheap.domains.getContacts`. Optional: DomainName."),
 			mcplib.WithString("DomainName", mcplib.Description("Fully qualified domain name.")),
 			mcplib.WithReadOnlyHintAnnotation(true),
 			mcplib.WithDestructiveHintAnnotation(false),
 			mcplib.WithOpenWorldHintAnnotation(true),
 		),
-		makeAPIHandler("GET", "/xml.response/domains/get-contacts", []string{}),
+		makeAPIHandler("GET", "/domains/get-contacts", []mcpParamBinding{{PublicName: "DomainName", WireName: "DomainName", Location: "query"}}, []string{}),
 	)
 	s.AddTool(
-		mcplib.NewTool("xml-response_domains-get-info",
-			mcplib.WithToolAnnotation(mcplib.ToolAnnotation{}),
+		mcplib.NewTool("domains_get-info",
 			mcplib.WithDescription("Runs `namecheap.domains.getInfo` for a domain. Optional: DomainName."),
 			mcplib.WithString("DomainName", mcplib.Description("Fully qualified domain name.")),
 			mcplib.WithReadOnlyHintAnnotation(true),
 			mcplib.WithDestructiveHintAnnotation(false),
 			mcplib.WithOpenWorldHintAnnotation(true),
 		),
-		makeAPIHandler("GET", "/xml.response/domains/get-info", []string{}),
+		makeAPIHandler("GET", "/domains/get-info", []mcpParamBinding{{PublicName: "DomainName", WireName: "DomainName", Location: "query"}}, []string{}),
 	)
 	s.AddTool(
-		mcplib.NewTool("xml-response_domains-get-list",
-			mcplib.WithToolAnnotation(mcplib.ToolAnnotation{}),
+		mcplib.NewTool("domains_get-list",
 			mcplib.WithDescription("Runs `namecheap.domains.getList` with paging and optional filters. Optional: Page, PageSize, SortBy (plus 2 more)."),
 			mcplib.WithString("Page", mcplib.Description("Page")),
 			mcplib.WithString("PageSize", mcplib.Description("Page size")),
@@ -158,32 +147,29 @@ func RegisterTools(s *server.MCPServer) {
 			mcplib.WithDestructiveHintAnnotation(false),
 			mcplib.WithOpenWorldHintAnnotation(true),
 		),
-		makeAPIHandler("GET", "/xml.response/domains/get-list", []string{}),
+		makeAPIHandler("GET", "/domains/get-list", []mcpParamBinding{{PublicName: "Page", WireName: "Page", Location: "query"}, {PublicName: "PageSize", WireName: "PageSize", Location: "query"}, {PublicName: "SortBy", WireName: "SortBy", Location: "query"}, {PublicName: "SearchTerm", WireName: "SearchTerm", Location: "query"}, {PublicName: "ListType", WireName: "ListType", Location: "query"}}, []string{}),
 	)
 	s.AddTool(
-		mcplib.NewTool("xml-response_domains-get-registrar-lock",
-			mcplib.WithToolAnnotation(mcplib.ToolAnnotation{}),
+		mcplib.NewTool("domains_get-registrar-lock",
 			mcplib.WithDescription("Runs `namecheap.domains.getRegistrarLock`. Optional: DomainName."),
 			mcplib.WithString("DomainName", mcplib.Description("Fully qualified domain name.")),
 			mcplib.WithReadOnlyHintAnnotation(true),
 			mcplib.WithDestructiveHintAnnotation(false),
 			mcplib.WithOpenWorldHintAnnotation(true),
 		),
-		makeAPIHandler("GET", "/xml.response/domains/get-registrar-lock", []string{}),
+		makeAPIHandler("GET", "/domains/get-registrar-lock", []mcpParamBinding{{PublicName: "DomainName", WireName: "DomainName", Location: "query"}}, []string{}),
 	)
 	s.AddTool(
-		mcplib.NewTool("xml-response_domains-get-tld-list",
-			mcplib.WithToolAnnotation(mcplib.ToolAnnotation{}),
+		mcplib.NewTool("domains_get-tld-list",
 			mcplib.WithDescription("Runs `namecheap.domains.getTldList`."),
 			mcplib.WithReadOnlyHintAnnotation(true),
 			mcplib.WithDestructiveHintAnnotation(false),
 			mcplib.WithOpenWorldHintAnnotation(true),
 		),
-		makeAPIHandler("GET", "/xml.response/domains/get-tld-list", []string{}),
+		makeAPIHandler("GET", "/domains/get-tld-list", []mcpParamBinding{}, []string{}),
 	)
 	s.AddTool(
-		mcplib.NewTool("xml-response_domains-renew",
-			mcplib.WithToolAnnotation(mcplib.ToolAnnotation{}),
+		mcplib.NewTool("domains_renew",
 			mcplib.WithDescription("Runs `namecheap.domains.renew`. Mutating paid operation. Optional: DomainName, Years, PromotionCode."),
 			mcplib.WithString("DomainName", mcplib.Description("Fully qualified domain name.")),
 			mcplib.WithString("Years", mcplib.Description("Years")),
@@ -192,11 +178,10 @@ func RegisterTools(s *server.MCPServer) {
 			mcplib.WithDestructiveHintAnnotation(false),
 			mcplib.WithOpenWorldHintAnnotation(true),
 		),
-		makeAPIHandler("GET", "/xml.response/domains/renew", []string{}),
+		makeAPIHandler("GET", "/domains/renew", []mcpParamBinding{{PublicName: "DomainName", WireName: "DomainName", Location: "query"}, {PublicName: "Years", WireName: "Years", Location: "query"}, {PublicName: "PromotionCode", WireName: "PromotionCode", Location: "query"}}, []string{}),
 	)
 	s.AddTool(
-		mcplib.NewTool("xml-response_domains-set-registrar-lock",
-			mcplib.WithToolAnnotation(mcplib.ToolAnnotation{}),
+		mcplib.NewTool("domains_set-registrar-lock",
 			mcplib.WithDescription("Runs `namecheap.domains.setRegistrarLock`. Optional: DomainName, LockAction."),
 			mcplib.WithString("DomainName", mcplib.Description("Fully qualified domain name.")),
 			mcplib.WithString("LockAction", mcplib.Description("Lock action")),
@@ -204,11 +189,10 @@ func RegisterTools(s *server.MCPServer) {
 			mcplib.WithDestructiveHintAnnotation(false),
 			mcplib.WithOpenWorldHintAnnotation(true),
 		),
-		makeAPIHandler("GET", "/xml.response/domains/set-registrar-lock", []string{}),
+		makeAPIHandler("GET", "/domains/set-registrar-lock", []mcpParamBinding{{PublicName: "DomainName", WireName: "DomainName", Location: "query"}, {PublicName: "LockAction", WireName: "LockAction", Location: "query"}}, []string{}),
 	)
 	s.AddTool(
-		mcplib.NewTool("xml-response_ssl-get-info",
-			mcplib.WithToolAnnotation(mcplib.ToolAnnotation{}),
+		mcplib.NewTool("ssl_get-info",
 			mcplib.WithDescription("Get SSL certificate information. Optional: CertificateID, CertificateType."),
 			mcplib.WithString("CertificateID", mcplib.Description("Certificate id")),
 			mcplib.WithString("CertificateType", mcplib.Description("Certificate type")),
@@ -216,11 +200,10 @@ func RegisterTools(s *server.MCPServer) {
 			mcplib.WithDestructiveHintAnnotation(false),
 			mcplib.WithOpenWorldHintAnnotation(true),
 		),
-		makeAPIHandler("GET", "/xml.response/ssl/get-info", []string{}),
+		makeAPIHandler("GET", "/ssl/get-info", []mcpParamBinding{{PublicName: "CertificateID", WireName: "CertificateID", Location: "query"}, {PublicName: "CertificateType", WireName: "CertificateType", Location: "query"}}, []string{}),
 	)
 	s.AddTool(
-		mcplib.NewTool("xml-response_ssl-get-list",
-			mcplib.WithToolAnnotation(mcplib.ToolAnnotation{}),
+		mcplib.NewTool("ssl_get-list",
 			mcplib.WithDescription("Runs `namecheap.ssl.getList`. Optional: Page, PageSize, ListType (plus 1 more)."),
 			mcplib.WithString("Page", mcplib.Description("Page")),
 			mcplib.WithString("PageSize", mcplib.Description("Page size")),
@@ -230,11 +213,10 @@ func RegisterTools(s *server.MCPServer) {
 			mcplib.WithDestructiveHintAnnotation(false),
 			mcplib.WithOpenWorldHintAnnotation(true),
 		),
-		makeAPIHandler("GET", "/xml.response/ssl/get-list", []string{}),
+		makeAPIHandler("GET", "/ssl/get-list", []mcpParamBinding{{PublicName: "Page", WireName: "Page", Location: "query"}, {PublicName: "PageSize", WireName: "PageSize", Location: "query"}, {PublicName: "ListType", WireName: "ListType", Location: "query"}, {PublicName: "SearchTerm", WireName: "SearchTerm", Location: "query"}}, []string{}),
 	)
 	s.AddTool(
-		mcplib.NewTool("xml-response_ssl-parse-csr",
-			mcplib.WithToolAnnotation(mcplib.ToolAnnotation{}),
+		mcplib.NewTool("ssl_parse-csr",
 			mcplib.WithDescription("Parse a certificate signing request. Optional: csr, CertificateType."),
 			mcplib.WithString("csr", mcplib.Description("Csr")),
 			mcplib.WithString("CertificateType", mcplib.Description("Certificate type")),
@@ -242,42 +224,38 @@ func RegisterTools(s *server.MCPServer) {
 			mcplib.WithDestructiveHintAnnotation(false),
 			mcplib.WithOpenWorldHintAnnotation(true),
 		),
-		makeAPIHandler("GET", "/xml.response/ssl/parse-csr", []string{}),
+		makeAPIHandler("GET", "/ssl/parse-csr", []mcpParamBinding{{PublicName: "csr", WireName: "csr", Location: "query"}, {PublicName: "CertificateType", WireName: "CertificateType", Location: "query"}}, []string{}),
 	)
 	s.AddTool(
-		mcplib.NewTool("xml-response_users-address-get-info",
-			mcplib.WithToolAnnotation(mcplib.ToolAnnotation{}),
+		mcplib.NewTool("users_address-get-info",
 			mcplib.WithDescription("Runs `namecheap.users.address.getInfo`. Optional: AddressId."),
 			mcplib.WithString("AddressId", mcplib.Description("Address id")),
 			mcplib.WithReadOnlyHintAnnotation(true),
 			mcplib.WithDestructiveHintAnnotation(false),
 			mcplib.WithOpenWorldHintAnnotation(true),
 		),
-		makeAPIHandler("GET", "/xml.response/users/address/get-info", []string{}),
+		makeAPIHandler("GET", "/users/address/get-info", []mcpParamBinding{{PublicName: "AddressId", WireName: "AddressId", Location: "query"}}, []string{}),
 	)
 	s.AddTool(
-		mcplib.NewTool("xml-response_users-address-get-list",
-			mcplib.WithToolAnnotation(mcplib.ToolAnnotation{}),
+		mcplib.NewTool("users_address-get-list",
 			mcplib.WithDescription("Runs `namecheap.users.address.getList`."),
 			mcplib.WithReadOnlyHintAnnotation(true),
 			mcplib.WithDestructiveHintAnnotation(false),
 			mcplib.WithOpenWorldHintAnnotation(true),
 		),
-		makeAPIHandler("GET", "/xml.response/users/address/get-list", []string{}),
+		makeAPIHandler("GET", "/users/address/get-list", []mcpParamBinding{}, []string{}),
 	)
 	s.AddTool(
-		mcplib.NewTool("xml-response_users-get-balances",
-			mcplib.WithToolAnnotation(mcplib.ToolAnnotation{}),
+		mcplib.NewTool("users_get-balances",
 			mcplib.WithDescription("Runs `namecheap.users.getBalances`."),
 			mcplib.WithReadOnlyHintAnnotation(true),
 			mcplib.WithDestructiveHintAnnotation(false),
 			mcplib.WithOpenWorldHintAnnotation(true),
 		),
-		makeAPIHandler("GET", "/xml.response/users/get-balances", []string{}),
+		makeAPIHandler("GET", "/users/get-balances", []mcpParamBinding{}, []string{}),
 	)
 	s.AddTool(
-		mcplib.NewTool("xml-response_users-get-pricing",
-			mcplib.WithToolAnnotation(mcplib.ToolAnnotation{}),
+		mcplib.NewTool("users_get-pricing",
 			mcplib.WithDescription("Runs `namecheap.users.getPricing`. Optional: ProductType, ProductCategory, PromotionCode (plus 1 more)."),
 			mcplib.WithString("ProductType", mcplib.Description("Product type")),
 			mcplib.WithString("ProductCategory", mcplib.Description("Product category")),
@@ -287,13 +265,24 @@ func RegisterTools(s *server.MCPServer) {
 			mcplib.WithDestructiveHintAnnotation(false),
 			mcplib.WithOpenWorldHintAnnotation(true),
 		),
-		makeAPIHandler("GET", "/xml.response/users/get-pricing", []string{}),
+		makeAPIHandler("GET", "/users/get-pricing", []mcpParamBinding{{PublicName: "ProductType", WireName: "ProductType", Location: "query"}, {PublicName: "ProductCategory", WireName: "ProductCategory", Location: "query"}, {PublicName: "PromotionCode", WireName: "PromotionCode", Location: "query"}, {PublicName: "ActionName", WireName: "ActionName", Location: "query"}}, []string{}),
+	)
+	// Search tool — faster than iterating list endpoints for finding specific items
+	s.AddTool(
+		mcplib.NewTool("search",
+			mcplib.WithDescription("Full-text search across all synced data. Faster than paginating list endpoints. Requires sync first."),
+			mcplib.WithString("query", mcplib.Required(), mcplib.Description("Search query (supports FTS5 syntax: AND, OR, NOT, quotes for phrases)")),
+			mcplib.WithNumber("limit", mcplib.Description("Max results (default 25)")),
+			mcplib.WithReadOnlyHintAnnotation(true),
+			mcplib.WithDestructiveHintAnnotation(false),
+		),
+		handleSearch,
 	)
 	// SQL tool — ad-hoc analysis on synced data without API calls
 	s.AddTool(
 		mcplib.NewTool("sql",
 			mcplib.WithDescription("Run read-only SQL against local database. Use for ad-hoc analysis, aggregations, and joins across synced resources. Requires sync first."),
-			mcplib.WithString("query", mcplib.Required(), mcplib.Description("SQL query (SELECT only). Tables match resource names.")),
+			mcplib.WithString("query", mcplib.Required(), mcplib.Description("SQL query (SELECT or WITH...SELECT). Tables match resource names.")),
 			mcplib.WithReadOnlyHintAnnotation(true),
 			mcplib.WithDestructiveHintAnnotation(false),
 		),
@@ -316,8 +305,14 @@ func RegisterTools(s *server.MCPServer) {
 	cobratree.RegisterAll(s, cli.RootCmd(), cobratree.SiblingCLIPath)
 }
 
+type mcpParamBinding struct {
+	PublicName string
+	WireName   string
+	Location   string
+}
+
 // makeAPIHandler creates a generic MCP tool handler for an API endpoint.
-func makeAPIHandler(method, pathTemplate string, positionalParams []string) server.ToolHandlerFunc {
+func makeAPIHandler(method, pathTemplate string, bindings []mcpParamBinding, positionalParams []string) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
 		c, err := newMCPClient()
 		if err != nil {
@@ -333,7 +328,27 @@ func makeAPIHandler(method, pathTemplate string, positionalParams []string) serv
 		// args that map to query params (e.g. `search <query>` -> ?query=);
 		// the placeholder check below disambiguates them at runtime.
 		path := pathTemplate
+		knownArgs := make(map[string]bool, len(bindings))
 		pathParams := make(map[string]bool, len(positionalParams))
+		params := make(map[string]string)
+		bodyArgs := make(map[string]any)
+		for _, binding := range bindings {
+			knownArgs[binding.PublicName] = true
+			v, ok := args[binding.PublicName]
+			if !ok {
+				continue
+			}
+			switch binding.Location {
+			case "path":
+				placeholder := "{" + binding.WireName + "}"
+				pathParams[binding.PublicName] = true
+				path = strings.Replace(path, placeholder, fmt.Sprintf("%v", v), 1)
+			case "body":
+				bodyArgs[binding.WireName] = v
+			default:
+				params[binding.WireName] = fmt.Sprintf("%v", v)
+			}
+		}
 		for _, p := range positionalParams {
 			placeholder := "{" + p + "}"
 			if !strings.Contains(pathTemplate, placeholder) {
@@ -345,12 +360,16 @@ func makeAPIHandler(method, pathTemplate string, positionalParams []string) serv
 			}
 		}
 
-		params := make(map[string]string)
 		for k, v := range args {
-			if pathParams[k] {
+			if pathParams[k] || knownArgs[k] {
 				continue
 			}
-			params[k] = fmt.Sprintf("%v", v)
+			switch method {
+			case "POST", "PUT", "PATCH":
+				bodyArgs[k] = v
+			default:
+				params[k] = fmt.Sprintf("%v", v)
+			}
 		}
 
 		var data json.RawMessage
@@ -358,16 +377,16 @@ func makeAPIHandler(method, pathTemplate string, positionalParams []string) serv
 		case "GET":
 			data, err = c.Get(path, params)
 		case "POST":
-			body, _ := json.Marshal(args)
-			data, _, err = c.Post(path, body)
+			body, _ := json.Marshal(bodyArgs)
+			data, _, err = c.PostWithParams(path, params, body)
 		case "PUT":
-			body, _ := json.Marshal(args)
-			data, _, err = c.Put(path, body)
+			body, _ := json.Marshal(bodyArgs)
+			data, _, err = c.PutWithParams(path, params, body)
 		case "PATCH":
-			body, _ := json.Marshal(args)
-			data, _, err = c.Patch(path, body)
+			body, _ := json.Marshal(bodyArgs)
+			data, _, err = c.PatchWithParams(path, params, body)
 		case "DELETE":
-			data, _, err = c.Delete(path)
+			data, _, err = c.DeleteWithParams(path, params)
 		default:
 			return mcplib.NewToolResultError("unsupported method: " + method), nil
 		}
@@ -378,7 +397,6 @@ func makeAPIHandler(method, pathTemplate string, positionalParams []string) serv
 			case strings.Contains(msg, "HTTP 409"):
 				return mcplib.NewToolResultText("already exists (no-op)"), nil
 			case strings.Contains(msg, "HTTP 400") && cliutil.LooksLikeAuthError(msg):
-				// PATCH(namecheap-api-key-env): point MCP auth failure hints at the env var config.Load actually reads.
 				return mcplib.NewToolResultError("authentication error: " + cliutil.SanitizeErrorBody(msg) +
 					"\nhint: the API rejected the request — this usually means auth is missing or invalid." +
 					"\n      Set your API key: export NAMECHEAP_API_KEY=<your-key>" +
@@ -449,6 +467,87 @@ func dbPath() string {
 // Note: MCP tools use their own dbPath() because they are in a separate package (main, not cli).
 // The CLI's defaultDBPath() in the cli package uses the same canonical path.
 
+func handleSearch(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
+	args := req.GetArguments()
+	query, ok := args["query"].(string)
+	if !ok || query == "" {
+		return mcplib.NewToolResultError("query is required"), nil
+	}
+
+	limit := 25
+	if v, ok := args["limit"].(float64); ok && v > 0 {
+		limit = int(v)
+	}
+
+	db, err := store.OpenReadOnly(dbPath())
+	if err != nil {
+		return mcplib.NewToolResultError(fmt.Sprintf("opening database: %v", err)), nil
+	}
+	defer db.Close()
+
+	results, err := db.Search(query, limit)
+	if err != nil {
+		return mcplib.NewToolResultError(fmt.Sprintf("search failed: %v", err)), nil
+	}
+
+	data, _ := json.MarshalIndent(results, "", "  ")
+	return mcplib.NewToolResultText(string(data)), nil
+}
+
+// validateReadOnlyQuery gates the MCP sql tool. The agent contract advertised
+// to the host is ReadOnlyHintAnnotation(true); a false annotation on a
+// mutating tool lets MCP hosts auto-approve writes and is treated as a real
+// bug per the project's agent-native security model.
+//
+// The gate is an allowlist (SELECT or WITH only) applied AFTER stripping the
+// leading whitespace, line comments, block comments, and semicolons that
+// SQLite itself ignores before parsing. A naive HasPrefix check on a
+// keyword blocklist is bypassable by prefixing the dangerous statement with
+// "/* x */" or "-- x\n" — TrimSpace strips outer whitespace but does not
+// understand SQL comment syntax. Combined with the empirical fact that
+// modernc.org/sqlite's mode=ro does NOT block VACUUM INTO (writes a snapshot
+// to a new file) or ATTACH DATABASE (opens a separate writable handle),
+// such a bypass produces silent exfiltration to an attacker-chosen path.
+//
+// SELECT and WITH are the only allowed leading keywords. WITH supports
+// SELECT-form CTEs; CTE-wrapped writes ("WITH x AS (...) INSERT ...") are
+// caught by OpenReadOnly's mode=ro one layer down. PRAGMA, ATTACH, VACUUM,
+// and every other DDL/DML keyword fail at this gate before reaching SQLite.
+func validateReadOnlyQuery(query string) error {
+	upper := strings.ToUpper(stripLeadingSQLNoise(query))
+	if !strings.HasPrefix(upper, "SELECT") && !strings.HasPrefix(upper, "WITH") {
+		return fmt.Errorf("only SELECT queries are allowed")
+	}
+	return nil
+}
+
+// stripLeadingSQLNoise removes leading whitespace, SQL line comments
+// (-- to end of line), block comments (/* ... */), and statement
+// separators (;) from query. SQLite skips these before parsing the first
+// keyword, so a security gate that does not strip them mismatches what the
+// driver actually executes.
+func stripLeadingSQLNoise(query string) string {
+	for {
+		query = strings.TrimLeft(query, " \t\r\n;")
+		switch {
+		case strings.HasPrefix(query, "--"):
+			if idx := strings.IndexByte(query, '\n'); idx >= 0 {
+				query = query[idx+1:]
+				continue
+			}
+			return ""
+		case strings.HasPrefix(query, "/*"):
+			if idx := strings.Index(query[2:], "*/"); idx >= 0 {
+				query = query[2+idx+2:]
+				continue
+			}
+			return ""
+		default:
+			return query
+		}
+	}
+}
+
 func handleSQL(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
 	args := req.GetArguments()
 	query, ok := args["query"].(string)
@@ -456,15 +555,11 @@ func handleSQL(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToo
 		return mcplib.NewToolResultError("query is required"), nil
 	}
 
-	// Block write operations
-	upper := strings.ToUpper(strings.TrimSpace(query))
-	for _, prefix := range []string{"INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE"} {
-		if strings.HasPrefix(upper, prefix) {
-			return mcplib.NewToolResultError("only SELECT queries are allowed"), nil
-		}
+	if err := validateReadOnlyQuery(query); err != nil {
+		return mcplib.NewToolResultError(err.Error()), nil
 	}
 
-	db, err := store.OpenWithContext(ctx, dbPath())
+	db, err := store.OpenReadOnly(dbPath())
 	if err != nil {
 		return mcplib.NewToolResultError(fmt.Sprintf("opening database: %v", err)), nil
 	}
@@ -508,7 +603,6 @@ func handleContext(_ context.Context, _ mcplib.CallToolRequest) (*mcplib.CallToo
 			"type": "api_key",
 			"env_vars": []map[string]any{
 				{
-					// PATCH(namecheap-api-key-env): advertise the env var config.Load actually reads.
 					"name":        "NAMECHEAP_API_KEY",
 					"kind":        "per_call",
 					"required":    true,
@@ -519,9 +613,30 @@ func handleContext(_ context.Context, _ mcplib.CallToolRequest) (*mcplib.CallToo
 		},
 		"resources": []map[string]any{
 			{
-				"name":        "xml-response",
-				"description": "Manage xml response",
-				"endpoints":   []string{"domains-check", "domains-create", "domains-dns-get-email-forwarding", "domains-dns-get-hosts", "domains-dns-get-list", "domains-dns-set-custom", "domains-dns-set-default", "domains-dns-set-hosts", "domains-get-contacts", "domains-get-info", "domains-get-list", "domains-get-registrar-lock", "domains-get-tld-list", "domains-renew", "domains-set-registrar-lock", "ssl-get-info", "ssl-get-list", "ssl-parse-csr", "users-address-get-info", "users-address-get-list", "users-get-balances", "users-get-pricing"},
+				"name":        "dns",
+				"description": "Manage dns",
+				"endpoints":   []string{"domains-get-email-forwarding", "domains-get-hosts", "domains-get-list", "domains-set-custom", "domains-set-default", "domains-set-hosts"},
+				"syncable":    true,
+				"searchable":  true,
+			},
+			{
+				"name":        "domains",
+				"description": "Manage domains",
+				"endpoints":   []string{"check", "create", "get-contacts", "get-info", "get-list", "get-registrar-lock", "get-tld-list", "renew", "set-registrar-lock"},
+				"syncable":    true,
+				"searchable":  true,
+			},
+			{
+				"name":        "ssl",
+				"description": "Manage ssl",
+				"endpoints":   []string{"get-info", "get-list", "parse-csr"},
+				"syncable":    true,
+				"searchable":  true,
+			},
+			{
+				"name":        "users",
+				"description": "Manage users",
+				"endpoints":   []string{"address-get-info", "address-get-list", "get-balances", "get-pricing"},
 				"syncable":    true,
 				"searchable":  true,
 			},

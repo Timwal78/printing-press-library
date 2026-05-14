@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mvanhorn/printing-press-library/library/developer-tools/namecheap/internal/cliutil"
@@ -34,7 +35,8 @@ type Client struct {
 	cacheDir   string
 	limiter    *cliutil.AdaptiveLimiter
 	// PATCH(namecheap-client-ip-cache): cache auto-detected public IP per client to avoid per-request ipify calls.
-	detectedClientIP string
+	detectedClientIP     string
+	detectedClientIPOnce sync.Once
 }
 
 // APIError carries HTTP status information for structured exit codes.
@@ -76,17 +78,34 @@ func (c *Client) Get(path string, params map[string]string) (json.RawMessage, er
 }
 
 func (c *Client) GetWithHeaders(path string, params map[string]string, headers map[string]string) (json.RawMessage, error) {
-	// Check cache for GET requests
-	if !c.NoCache && !c.DryRun && c.cacheDir != "" {
-		if cached, ok := c.readCache(path, params); ok {
+	isNamecheapMutation := isNamecheapMutationPath(path)
+	cacheParams := cloneStringMap(params)
+	// Check cache for GET requests.
+	if !isNamecheapMutation && !c.NoCache && !c.DryRun && c.cacheDir != "" {
+		if cached, ok := c.readCache(path, cacheParams); ok {
 			return cached, nil
 		}
 	}
 	result, _, err := c.do("GET", path, params, nil, headers)
-	if err == nil && !c.NoCache && !c.DryRun && c.cacheDir != "" {
-		c.writeCache(path, params, result)
+	if err == nil && isNamecheapMutation {
+		// PATCH(namecheap-mutation-cache-bypass): Namecheap mutations are GET requests; never cache/replay them.
+		c.invalidateCache()
+	} else if err == nil && !c.NoCache && !c.DryRun && c.cacheDir != "" {
+		// PATCH(namecheap-cache-key-params): request prep mutates params with auth fields; cache under the original caller params.
+		c.writeCache(path, cacheParams, result)
 	}
 	return result, err
+}
+
+func cloneStringMap(in map[string]string) map[string]string {
+	if in == nil {
+		return nil
+	}
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
 }
 
 func (c *Client) ProbeGet(path string) (int, error) {
@@ -146,12 +165,20 @@ func (c *Client) PostWithHeaders(path string, body any, headers map[string]strin
 	return c.do("POST", path, nil, body, headers)
 }
 
+func (c *Client) PostWithParams(path string, params map[string]string, body any) (json.RawMessage, int, error) {
+	return c.do("POST", path, params, body, nil)
+}
+
 func (c *Client) Delete(path string) (json.RawMessage, int, error) {
 	return c.do("DELETE", path, nil, nil, nil)
 }
 
 func (c *Client) DeleteWithHeaders(path string, headers map[string]string) (json.RawMessage, int, error) {
 	return c.do("DELETE", path, nil, nil, headers)
+}
+
+func (c *Client) DeleteWithParams(path string, params map[string]string) (json.RawMessage, int, error) {
+	return c.do("DELETE", path, params, nil, nil)
 }
 
 func (c *Client) Put(path string, body any) (json.RawMessage, int, error) {
@@ -162,12 +189,20 @@ func (c *Client) PutWithHeaders(path string, body any, headers map[string]string
 	return c.do("PUT", path, nil, body, headers)
 }
 
+func (c *Client) PutWithParams(path string, params map[string]string, body any) (json.RawMessage, int, error) {
+	return c.do("PUT", path, params, body, nil)
+}
+
 func (c *Client) Patch(path string, body any) (json.RawMessage, int, error) {
 	return c.do("PATCH", path, nil, body, nil)
 }
 
 func (c *Client) PatchWithHeaders(path string, body any, headers map[string]string) (json.RawMessage, int, error) {
 	return c.do("PATCH", path, nil, body, headers)
+}
+
+func (c *Client) PatchWithParams(path string, params map[string]string, body any) (json.RawMessage, int, error) {
+	return c.do("PATCH", path, params, body, nil)
 }
 
 // do executes an HTTP request. headerOverrides, when non-nil, override global
@@ -465,15 +500,19 @@ func sanitizeJSONResponse(body []byte) []byte {
 }
 
 func (c *Client) prepareNamecheapRequest(path string, params map[string]string) (string, map[string]string, error) {
-	if !strings.HasPrefix(path, "/xml.response/") {
-		return path, params, nil
+	lookupPath := strings.TrimPrefix(path, "/xml.response")
+	if !strings.HasPrefix(lookupPath, "/") {
+		lookupPath = "/" + lookupPath
 	}
-	command, ok := namecheapCommandByPath[path]
+	command, ok := namecheapCommandByPath[lookupPath]
 	if !ok {
 		return "", nil, fmt.Errorf("unsupported Namecheap command path %q", path)
 	}
 	if params == nil {
 		params = map[string]string{}
+	} else {
+		// PATCH(namecheap-cache-key-params): avoid mutating caller params while injecting Namecheap auth fields.
+		params = cloneStringMap(params)
 	}
 	if c.Config == nil || strings.TrimSpace(c.Config.APIUser) == "" || strings.TrimSpace(c.Config.APIKey) == "" {
 		return "", nil, fmt.Errorf("missing namecheap credentials: set NAMECHEAP_USERNAME and NAMECHEAP_API_KEY (NAMECHEAP_CLIENT_IP optional, auto-detected when absent)")
@@ -486,9 +525,9 @@ func (c *Client) prepareNamecheapRequest(path string, params map[string]string) 
 		params["ClientIp"] = strings.TrimSpace(c.Config.ClientIP)
 	} else {
 		// PATCH(namecheap-client-ip-cache): resolve once per Client instead of hitting ipify on every request.
-		if c.detectedClientIP == "" {
+		c.detectedClientIPOnce.Do(func() {
 			c.detectedClientIP = detectClientIP(c.HTTPClient)
-		}
+		})
 		params["ClientIp"] = c.detectedClientIP
 	}
 	return "/xml.response", params, nil
@@ -499,28 +538,42 @@ func isSensitiveQueryParam(key string) bool {
 }
 
 var namecheapCommandByPath = map[string]string{
-	"/xml.response/domains/check":              "namecheap.domains.check",
-	"/xml.response/domains/get-list":           "namecheap.domains.getList",
-	"/xml.response/domains/get-info":           "namecheap.domains.getInfo",
-	"/xml.response/domains/get-contacts":       "namecheap.domains.getContacts",
-	"/xml.response/domains/get-registrar-lock": "namecheap.domains.getRegistrarLock",
-	"/xml.response/domains/get-tld-list":       "namecheap.domains.getTldList",
-	"/xml.response/domains/create":             "namecheap.domains.create",
-	"/xml.response/domains/renew":              "namecheap.domains.renew",
-	"/xml.response/domains/set-registrar-lock": "namecheap.domains.setRegistrarLock",
-	"/xml.response/dns/get-list":               "namecheap.domains.dns.getList",
-	"/xml.response/dns/get-hosts":              "namecheap.domains.dns.getHosts",
-	"/xml.response/dns/set-hosts":              "namecheap.domains.dns.setHosts",
-	"/xml.response/dns/set-default":            "namecheap.domains.dns.setDefault",
-	"/xml.response/dns/set-custom":             "namecheap.domains.dns.setCustom",
-	"/xml.response/dns/get-email-forwarding":   "namecheap.domains.dns.getEmailForwarding",
-	"/xml.response/users/get-balances":         "namecheap.users.getBalances",
-	"/xml.response/users/get-pricing":          "namecheap.users.getPricing",
-	"/xml.response/users/address/get-list":     "namecheap.users.address.getList",
-	"/xml.response/users/address/get-info":     "namecheap.users.address.getInfo",
-	"/xml.response/ssl/get-list":               "namecheap.ssl.getList",
-	"/xml.response/ssl/get-info":               "namecheap.ssl.getInfo",
-	"/xml.response/ssl/parse-csr":              "namecheap.ssl.parseCSR",
+	"/domains/check":              "namecheap.domains.check",
+	"/domains/get-list":           "namecheap.domains.getList",
+	"/domains/get-info":           "namecheap.domains.getInfo",
+	"/domains/get-contacts":       "namecheap.domains.getContacts",
+	"/domains/get-registrar-lock": "namecheap.domains.getRegistrarLock",
+	"/domains/get-tld-list":       "namecheap.domains.getTldList",
+	"/domains/create":             "namecheap.domains.create",
+	"/domains/renew":              "namecheap.domains.renew",
+	"/domains/set-registrar-lock": "namecheap.domains.setRegistrarLock",
+	"/dns/get-list":               "namecheap.domains.dns.getList",
+	"/dns/get-hosts":              "namecheap.domains.dns.getHosts",
+	"/dns/set-hosts":              "namecheap.domains.dns.setHosts",
+	"/dns/set-default":            "namecheap.domains.dns.setDefault",
+	"/dns/set-custom":             "namecheap.domains.dns.setCustom",
+	"/dns/get-email-forwarding":   "namecheap.domains.dns.getEmailForwarding",
+	"/users/get-balances":         "namecheap.users.getBalances",
+	"/users/get-pricing":          "namecheap.users.getPricing",
+	"/users/address/get-list":     "namecheap.users.address.getList",
+	"/users/address/get-info":     "namecheap.users.address.getInfo",
+	"/ssl/get-list":               "namecheap.ssl.getList",
+	"/ssl/get-info":               "namecheap.ssl.getInfo",
+	"/ssl/parse-csr":              "namecheap.ssl.parseCSR",
+}
+
+var namecheapMutationPaths = map[string]bool{
+	"/domains/create":             true,
+	"/domains/renew":              true,
+	"/domains/set-registrar-lock": true,
+	"/dns/set-default":            true,
+	"/dns/set-hosts":              true,
+	"/dns/set-custom":             true,
+}
+
+func isNamecheapMutationPath(path string) bool {
+	path = strings.TrimPrefix(path, "/xml.response")
+	return namecheapMutationPaths[path]
 }
 
 func detectClientIP(httpClient *http.Client) string {

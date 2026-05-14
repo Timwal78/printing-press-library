@@ -1,28 +1,15 @@
 ---
 name: pp-namecheap
 description: "Printing Press CLI for Namecheap. Curated OpenAPI description for Namecheap's XML API. The real API uses a single endpoint (`/xml.response`) with a..."
+author: "Cathryn Lavery"
+license: "Apache-2.0"
 argument-hint: "<command> [args] | install cli|mcp"
 allowed-tools: "Read Bash"
 metadata:
   openclaw:
     requires:
-      env: ["NAMECHEAP_USERNAME", "NAMECHEAP_API_KEY"]
       bins:
         - namecheap-pp-cli
-    envVars:
-      - name: NAMECHEAP_USERNAME
-        required: true
-        description: "Namecheap API username (also used as UserName)."
-      - name: NAMECHEAP_API_KEY
-        required: true
-        description: "Namecheap API key. Namecheap requires it as a query parameter."
-      - name: NAMECHEAP_CLIENT_IP
-        required: false
-        description: "Whitelisted public client IP. Auto-detected when omitted, but explicit is safer in CI."
-    install:
-      - kind: go
-        bins: [namecheap-pp-cli]
-        module: github.com/mvanhorn/printing-press-library/library/developer-tools/namecheap/cmd/namecheap-pp-cli
 ---
 
 # Namecheap — Printing Press CLI
@@ -54,34 +41,43 @@ by the Namecheap printed CLI patch layer.
 
 ## When Not to Use This CLI
 
-Do not use mutating or paid Namecheap commands (`domains-create`, `domains-renew`, DNS setters, registrar-lock setters) unless the user explicitly asks for that exact change and you have inspected `--dry-run` first. Namecheap API credentials are sent as query parameters because the official API requires that shape.
+Do not activate this CLI for requests that require creating, updating, deleting, publishing, commenting, upvoting, inviting, ordering, sending messages, booking, purchasing, or changing remote state. This printed CLI exposes read-only commands for inspection, export, sync, and analysis.
 
 ## Command Reference
 
-**xml-response** — Manage xml response
+**dns** — Manage dns
 
-- `namecheap-pp-cli xml-response domains-check` — Check domain availability for one or more domains.
-- `namecheap-pp-cli xml-response domains-create` — Runs `namecheap.domains.create`. This is a mutating paid operation; use dry-run unless intentionally registering.
-- `namecheap-pp-cli xml-response domains-dns-get-email-forwarding` — Runs `namecheap.domains.dns.getEmailForwarding`.
-- `namecheap-pp-cli xml-response domains-dns-get-hosts` — Runs `namecheap.domains.dns.getHosts`.
-- `namecheap-pp-cli xml-response domains-dns-get-list` — Get DNS nameserver type and nameservers.
-- `namecheap-pp-cli xml-response domains-dns-set-custom` — Runs `namecheap.domains.dns.setCustom`.
-- `namecheap-pp-cli xml-response domains-dns-set-default` — Switch a domain to Namecheap default DNS.
-- `namecheap-pp-cli xml-response domains-dns-set-hosts` — Runs `namecheap.domains.dns.setHosts`; HostName1/RecordType1/Address1/TTL1 style parameters can be passed via...
-- `namecheap-pp-cli xml-response domains-get-contacts` — Runs `namecheap.domains.getContacts`.
-- `namecheap-pp-cli xml-response domains-get-info` — Runs `namecheap.domains.getInfo` for a domain.
-- `namecheap-pp-cli xml-response domains-get-list` — Runs `namecheap.domains.getList` with paging and optional filters.
-- `namecheap-pp-cli xml-response domains-get-registrar-lock` — Runs `namecheap.domains.getRegistrarLock`.
-- `namecheap-pp-cli xml-response domains-get-tld-list` — Runs `namecheap.domains.getTldList`.
-- `namecheap-pp-cli xml-response domains-renew` — Runs `namecheap.domains.renew`. Mutating paid operation.
-- `namecheap-pp-cli xml-response domains-set-registrar-lock` — Runs `namecheap.domains.setRegistrarLock`.
-- `namecheap-pp-cli xml-response ssl-get-info` — Get SSL certificate information.
-- `namecheap-pp-cli xml-response ssl-get-list` — Runs `namecheap.ssl.getList`.
-- `namecheap-pp-cli xml-response ssl-parse-csr` — Parse a certificate signing request.
-- `namecheap-pp-cli xml-response users-address-get-info` — Runs `namecheap.users.address.getInfo`.
-- `namecheap-pp-cli xml-response users-address-get-list` — Runs `namecheap.users.address.getList`.
-- `namecheap-pp-cli xml-response users-get-balances` — Runs `namecheap.users.getBalances`.
-- `namecheap-pp-cli xml-response users-get-pricing` — Runs `namecheap.users.getPricing`.
+- `namecheap-pp-cli dns domains-get-email-forwarding` — Runs `namecheap.domains.dns.getEmailForwarding`.
+- `namecheap-pp-cli dns domains-get-hosts` — Runs `namecheap.domains.dns.getHosts`.
+- `namecheap-pp-cli dns domains-get-list` — Get DNS nameserver type and nameservers.
+- `namecheap-pp-cli dns domains-set-custom` — Runs `namecheap.domains.dns.setCustom`.
+- `namecheap-pp-cli dns domains-set-default` — Switch a domain to Namecheap default DNS.
+- `namecheap-pp-cli dns domains-set-hosts` — Runs `namecheap.domains.dns.setHosts`; HostName1/RecordType1/Address1/TTL1 style parameters can be passed via...
+
+**domains** — Manage domains
+
+- `namecheap-pp-cli domains check` — Check domain availability for one or more domains.
+- `namecheap-pp-cli domains create` — Runs `namecheap.domains.create`. This is a mutating paid operation; use dry-run unless intentionally registering.
+- `namecheap-pp-cli domains get-contacts` — Runs `namecheap.domains.getContacts`.
+- `namecheap-pp-cli domains get-info` — Runs `namecheap.domains.getInfo` for a domain.
+- `namecheap-pp-cli domains get-list` — Runs `namecheap.domains.getList` with paging and optional filters.
+- `namecheap-pp-cli domains get-registrar-lock` — Runs `namecheap.domains.getRegistrarLock`.
+- `namecheap-pp-cli domains get-tld-list` — Runs `namecheap.domains.getTldList`.
+- `namecheap-pp-cli domains renew` — Runs `namecheap.domains.renew`. Mutating paid operation.
+- `namecheap-pp-cli domains set-registrar-lock` — Runs `namecheap.domains.setRegistrarLock`.
+
+**ssl** — Manage ssl
+
+- `namecheap-pp-cli ssl get-info` — Get SSL certificate information.
+- `namecheap-pp-cli ssl get-list` — Runs `namecheap.ssl.getList`.
+- `namecheap-pp-cli ssl parse-csr` — Parse a certificate signing request.
+
+**users** — Manage users
+
+- `namecheap-pp-cli users address-get-info` — Runs `namecheap.users.address.getInfo`.
+- `namecheap-pp-cli users address-get-list` — Runs `namecheap.users.address.getList`.
+- `namecheap-pp-cli users get-balances` — Runs `namecheap.users.getBalances`.
+- `namecheap-pp-cli users get-pricing` — Runs `namecheap.users.getPricing`.
 
 
 ### Finding the right command
@@ -95,18 +91,15 @@ namecheap-pp-cli which "<capability in your own words>"
 `which` resolves a natural-language capability query to the best matching command from this CLI's curated feature index. Exit code `0` means at least one match; exit code `2` means no confident match — fall back to `--help` or use a narrower query.
 
 ## Auth Setup
-Namecheap requires API access to be enabled and the caller IP to be whitelisted in the Namecheap dashboard. Set credentials with:
+Run `namecheap-pp-cli auth setup` to print the URL and steps for getting a key (add `--launch` to open the URL). Then set:
 
 ```bash
-export NAMECHEAP_USERNAME="<namecheap-user>"
-export NAMECHEAP_API_KEY="<api-key>"
-# Optional but recommended for CI/agents; must match a Namecheap-whitelisted public IP.
-export NAMECHEAP_CLIENT_IP="<public-ip>"
-# Optional: use sandbox endpoint
-export NAMECHEAP_SANDBOX=1
+export NAMECHEAP_API_KEY="<your-key>"
 ```
 
-The CLI also accepts legacy `NAMECHEAP_API_USER` as a username alias. Run `namecheap-pp-cli doctor` and then a read-only smoke test such as `namecheap-pp-cli xml-response users-get-balances --agent --no-cache` to verify setup.
+Or persist it in `~/.config/namecheap-pp-cli/config.toml`.
+
+Run `namecheap-pp-cli doctor` to verify setup.
 
 ## Agent Mode
 
@@ -116,12 +109,12 @@ Add `--agent` to any command. Expands to: `--json --compact --no-input --no-colo
 - **Filterable** — `--select` keeps a subset of fields. Dotted paths descend into nested structures; arrays traverse element-wise. Critical for keeping context small on verbose APIs:
 
   ```bash
-  namecheap-pp-cli xml-response domains-check --agent --select id,name,status
+  namecheap-pp-cli dns domains-get-email-forwarding --agent --select id,name,status
   ```
 - **Previewable** — `--dry-run` shows the request without sending
 - **Offline-friendly** — sync/search commands can use the local SQLite store when available
 - **Non-interactive** — never prompts, every input is a flag
-- **Safety-aware** — read commands are safe; paid/mutating commands require explicit user intent and should be previewed with `--dry-run` first
+- **Read-only** — do not use this CLI for create, update, delete, publish, comment, upvote, invite, order, send, or other mutating requests
 
 ### Response envelope
 
@@ -134,7 +127,7 @@ Commands that read from the local store or the API wrap output in a provenance e
 }
 ```
 
-Parse `.results` for data and `.meta.source` to know whether it's live or local. A human-readable `N results (live)` summary is printed to stderr only when stdout is a terminal — piped/agent consumers get pure JSON on stdout.
+Parse `.results` for data and `.meta.source` to know whether it's live or local. A human-readable `N results (live)` summary is printed to stderr only when stdout is a terminal AND no machine-format flag (`--json`, `--csv`, `--compact`, `--quiet`, `--plain`, `--select`) is set — piped/agent consumers and explicit-format runs get pure JSON on stdout.
 
 ## Agent Feedback
 
@@ -168,7 +161,7 @@ A profile is a saved set of flag values, reused across invocations. Use it when 
 
 ```
 namecheap-pp-cli profile save briefing --json
-namecheap-pp-cli --profile briefing xml-response domains-check
+namecheap-pp-cli --profile briefing dns domains-get-email-forwarding
 namecheap-pp-cli profile list --json
 namecheap-pp-cli profile show briefing
 namecheap-pp-cli profile delete briefing --yes
@@ -196,32 +189,20 @@ Parse `$ARGUMENTS`:
 2. **Starts with `install`** → ends with `mcp` → MCP installation; otherwise → see Prerequisites above
 3. **Anything else** → Direct Use (execute as CLI command with `--agent`)
 
-## CLI Installation
-
-1. Check Go is installed: `go version` (requires Go 1.23+)
-2. Install:
-   ```bash
-   go install github.com/mvanhorn/printing-press-library/library/developer-tools/namecheap/cmd/namecheap-pp-cli@latest
-   ```
-3. Verify: `namecheap-pp-cli --version`
-4. Ensure `$GOPATH/bin` (or `$HOME/go/bin`) is on `$PATH`.
-
 ## MCP Server Installation
 
-1. Install the MCP server:
-   ```bash
-   go install github.com/mvanhorn/printing-press-library/library/developer-tools/namecheap/cmd/namecheap-pp-mcp@latest
-   ```
-2. Register with Claude Code:
-   ```bash
-   claude mcp add namecheap-pp-mcp -- namecheap-pp-mcp
-   ```
-3. Verify: `claude mcp list`
+Install the MCP binary from this CLI's published public-library entry or pre-built release, then register it:
+
+```bash
+claude mcp add namecheap-pp-mcp -- namecheap-pp-mcp
+```
+
+Verify: `claude mcp list`
 
 ## Direct Use
 
 1. Check if installed: `which namecheap-pp-cli`
-   If not found, offer to install (see CLI Installation above).
+   If not found, offer to install (see Prerequisites at the top of this skill).
 2. Match the user query to the best command from the Unique Capabilities and Command Reference above.
 3. Execute with the `--agent` flag:
    ```bash

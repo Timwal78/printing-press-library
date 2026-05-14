@@ -11,56 +11,45 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newXmlResponseDomainsSetRegistrarLockCmd(flags *rootFlags) *cobra.Command {
+func newDomainsGetContactsCmd(flags *rootFlags) *cobra.Command {
 	var flagDomainName string
-	var flagLockAction string
 
 	cmd := &cobra.Command{
-		Use:         "domains-set-registrar-lock",
-		Short:       "Runs `namecheap.domains.setRegistrarLock`.",
-		Example:     "  namecheap-pp-cli xml-response domains-set-registrar-lock",
-		Annotations: map[string]string{"pp:endpoint": "xml-response.domains-set-registrar-lock", "pp:method": "GET", "pp:path": "/xml.response/domains/set-registrar-lock", "mcp:destructive": "true"},
+		Use:         "get-contacts",
+		Short:       "Runs `namecheap.domains.getContacts`.",
+		Example:     "  namecheap-pp-cli domains get-contacts",
+		Annotations: map[string]string{"pp:endpoint": "domains.get-contacts", "pp:method": "GET", "pp:path": "/domains/get-contacts", "mcp:read-only": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if cmd.Flags().Changed("lock-action") {
-				allowedLockAction := []string{"LOCK", "UNLOCK"}
-				validLockAction := false
-				for _, v := range allowedLockAction {
-					if flagLockAction == v {
-						validLockAction = true
-						break
-					}
-				}
-				if !validLockAction {
-					fmt.Fprintf(os.Stderr, "warning: --%s %q not in allowed set %v\n", "lock-action", flagLockAction, allowedLockAction)
-				}
-			}
 			c, err := flags.newClient()
 			if err != nil {
 				return err
 			}
 
-			path := "/xml.response/domains/set-registrar-lock"
+			path := "/domains/get-contacts"
 			params := map[string]string{}
 			if flagDomainName != "" {
 				params["DomainName"] = fmt.Sprintf("%v", flagDomainName)
 			}
-			if flagLockAction != "" {
-				params["LockAction"] = fmt.Sprintf("%v", flagLockAction)
-			}
-			data, prov, err := resolveRead(cmd.Context(), c, flags, "xml-response", false, path, params, nil)
+			data, prov, err := resolveRead(cmd.Context(), c, flags, "domains", false, path, params, nil)
 			if err != nil {
 				return classifyAPIError(err, flags)
 			}
-			// Print provenance to stderr for human-facing output
-			{
+			// Print provenance to stderr for human-facing output only.
+			// Machine-format flags (--json, --csv, --compact, --quiet, --plain,
+			// --select) and piped stdout suppress this line; the JSON envelope
+			// already carries meta.source for those consumers.
+			// SYNC: keep this gate aligned with command_promoted.go.tmpl.
+			if wantsHumanTable(cmd.OutOrStdout(), flags) {
 				var countItems []json.RawMessage
 				_ = json.Unmarshal(data, &countItems)
 				printProvenance(cmd, len(countItems), prov)
 			}
 			// For JSON output, wrap with provenance envelope before passing through flags.
 			// --select wins over --compact when both are set; --compact only runs when
-			// no explicit fields were requested.
-			if flags.asJSON || !isTerminal(cmd.OutOrStdout()) {
+			// no explicit fields were requested. Explicit format flags (--csv, --quiet,
+			// --plain) opt out of the auto-JSON path so piped consumers that asked for
+			// a non-JSON format reach the standard pipeline below.
+			if flags.asJSON || (!isTerminal(cmd.OutOrStdout()) && !flags.csv && !flags.quiet && !flags.plain) {
 				filtered := data
 				if flags.selectFields != "" {
 					filtered = filterFields(filtered, flags.selectFields)
@@ -90,7 +79,6 @@ func newXmlResponseDomainsSetRegistrarLockCmd(flags *rootFlags) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&flagDomainName, "domain-name", "", "Fully qualified domain name.")
-	cmd.Flags().StringVar(&flagLockAction, "lock-action", "", "Lock action (one of: LOCK, UNLOCK)")
 
 	return cmd
 }

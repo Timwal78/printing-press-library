@@ -11,43 +11,50 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newXmlResponseDomainsDnsGetHostsCmd(flags *rootFlags) *cobra.Command {
-	var flagSLD string
-	var flagTLD string
+func newSslGetInfoCmd(flags *rootFlags) *cobra.Command {
+	var flagCertificateID string
+	var flagCertificateType string
 
 	cmd := &cobra.Command{
-		Use:         "domains-dns-get-hosts",
-		Short:       "Runs `namecheap.domains.dns.getHosts`.",
-		Example:     "  namecheap-pp-cli xml-response domains-dns-get-hosts",
-		Annotations: map[string]string{"pp:endpoint": "xml-response.domains-dns-get-hosts", "pp:method": "GET", "pp:path": "/xml.response/dns/get-hosts", "mcp:read-only": "true"},
+		Use:         "get-info",
+		Aliases:     []string{"list"},
+		Short:       "Get SSL certificate information.",
+		Example:     "  namecheap-pp-cli ssl get-info",
+		Annotations: map[string]string{"pp:endpoint": "ssl.get-info", "pp:method": "GET", "pp:path": "/ssl/get-info", "mcp:read-only": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, err := flags.newClient()
 			if err != nil {
 				return err
 			}
 
-			path := "/xml.response/dns/get-hosts"
+			path := "/ssl/get-info"
 			params := map[string]string{}
-			if flagSLD != "" {
-				params["SLD"] = fmt.Sprintf("%v", flagSLD)
+			if flagCertificateID != "" {
+				params["CertificateID"] = fmt.Sprintf("%v", flagCertificateID)
 			}
-			if flagTLD != "" {
-				params["TLD"] = fmt.Sprintf("%v", flagTLD)
+			if flagCertificateType != "" {
+				params["CertificateType"] = fmt.Sprintf("%v", flagCertificateType)
 			}
-			data, prov, err := resolveRead(cmd.Context(), c, flags, "xml-response", false, path, params, nil)
+			data, prov, err := resolveRead(cmd.Context(), c, flags, "ssl", false, path, params, nil)
 			if err != nil {
 				return classifyAPIError(err, flags)
 			}
-			// Print provenance to stderr for human-facing output
-			{
+			// Print provenance to stderr for human-facing output only.
+			// Machine-format flags (--json, --csv, --compact, --quiet, --plain,
+			// --select) and piped stdout suppress this line; the JSON envelope
+			// already carries meta.source for those consumers.
+			// SYNC: keep this gate aligned with command_promoted.go.tmpl.
+			if wantsHumanTable(cmd.OutOrStdout(), flags) {
 				var countItems []json.RawMessage
 				_ = json.Unmarshal(data, &countItems)
 				printProvenance(cmd, len(countItems), prov)
 			}
 			// For JSON output, wrap with provenance envelope before passing through flags.
 			// --select wins over --compact when both are set; --compact only runs when
-			// no explicit fields were requested.
-			if flags.asJSON || !isTerminal(cmd.OutOrStdout()) {
+			// no explicit fields were requested. Explicit format flags (--csv, --quiet,
+			// --plain) opt out of the auto-JSON path so piped consumers that asked for
+			// a non-JSON format reach the standard pipeline below.
+			if flags.asJSON || (!isTerminal(cmd.OutOrStdout()) && !flags.csv && !flags.quiet && !flags.plain) {
 				filtered := data
 				if flags.selectFields != "" {
 					filtered = filterFields(filtered, flags.selectFields)
@@ -76,8 +83,8 @@ func newXmlResponseDomainsDnsGetHostsCmd(flags *rootFlags) *cobra.Command {
 			return printOutputWithFlags(cmd.OutOrStdout(), data, flags)
 		},
 	}
-	cmd.Flags().StringVar(&flagSLD, "sld", "", "Second-level domain, without the TLD.")
-	cmd.Flags().StringVar(&flagTLD, "tld", "", "Top-level domain without the leading dot.")
+	cmd.Flags().StringVar(&flagCertificateID, "certificate-id", "", "Certificate id")
+	cmd.Flags().StringVar(&flagCertificateType, "certificate-type", "", "Certificate type")
 
 	return cmd
 }

@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newXmlResponseDomainsCreateCmd(flags *rootFlags) *cobra.Command {
+func newDomainsCreateCmd(flags *rootFlags) *cobra.Command {
 	var flagDomainName string
 	var flagYears int
 	var flagPromotionCode string
@@ -20,10 +20,10 @@ func newXmlResponseDomainsCreateCmd(flags *rootFlags) *cobra.Command {
 	var flagNameservers string
 
 	cmd := &cobra.Command{
-		Use:         "domains-create",
+		Use:         "create",
 		Short:       "Runs `namecheap.domains.create`. This is a mutating paid operation; use dry-run unless intentionally registering.",
-		Example:     "  namecheap-pp-cli xml-response domains-create",
-		Annotations: map[string]string{"pp:endpoint": "xml-response.domains-create", "pp:method": "GET", "pp:path": "/xml.response/domains/create", "mcp:destructive": "true"},
+		Example:     "  namecheap-pp-cli domains create",
+		Annotations: map[string]string{"pp:endpoint": "domains.create", "pp:method": "GET", "pp:path": "/domains/create", "mcp:read-only": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if cmd.Flags().Changed("add-free-whoisguard") {
 				allowedAddFreeWhoisguard := []string{"yes", "no"}
@@ -56,7 +56,7 @@ func newXmlResponseDomainsCreateCmd(flags *rootFlags) *cobra.Command {
 				return err
 			}
 
-			path := "/xml.response/domains/create"
+			path := "/domains/create"
 			params := map[string]string{}
 			if flagDomainName != "" {
 				params["DomainName"] = fmt.Sprintf("%v", flagDomainName)
@@ -76,20 +76,26 @@ func newXmlResponseDomainsCreateCmd(flags *rootFlags) *cobra.Command {
 			if flagNameservers != "" {
 				params["Nameservers"] = fmt.Sprintf("%v", flagNameservers)
 			}
-			data, prov, err := resolveRead(cmd.Context(), c, flags, "xml-response", false, path, params, nil)
+			data, prov, err := resolveRead(cmd.Context(), c, flags, "domains", false, path, params, nil)
 			if err != nil {
 				return classifyAPIError(err, flags)
 			}
-			// Print provenance to stderr for human-facing output
-			{
+			// Print provenance to stderr for human-facing output only.
+			// Machine-format flags (--json, --csv, --compact, --quiet, --plain,
+			// --select) and piped stdout suppress this line; the JSON envelope
+			// already carries meta.source for those consumers.
+			// SYNC: keep this gate aligned with command_promoted.go.tmpl.
+			if wantsHumanTable(cmd.OutOrStdout(), flags) {
 				var countItems []json.RawMessage
 				_ = json.Unmarshal(data, &countItems)
 				printProvenance(cmd, len(countItems), prov)
 			}
 			// For JSON output, wrap with provenance envelope before passing through flags.
 			// --select wins over --compact when both are set; --compact only runs when
-			// no explicit fields were requested.
-			if flags.asJSON || !isTerminal(cmd.OutOrStdout()) {
+			// no explicit fields were requested. Explicit format flags (--csv, --quiet,
+			// --plain) opt out of the auto-JSON path so piped consumers that asked for
+			// a non-JSON format reach the standard pipeline below.
+			if flags.asJSON || (!isTerminal(cmd.OutOrStdout()) && !flags.csv && !flags.quiet && !flags.plain) {
 				filtered := data
 				if flags.selectFields != "" {
 					filtered = filterFields(filtered, flags.selectFields)
