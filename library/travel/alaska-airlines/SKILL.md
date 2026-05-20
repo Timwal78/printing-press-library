@@ -41,8 +41,7 @@ These capabilities were scoped in the manuscript for this CLI but were not imple
 
 - `book prepare` (pre-checkout deeplink builder) - not implemented
 - `flights search --want-seats-together` (family-of-N seat finder) - not implemented
-- `flights watch` (fare drop watcher) - not implemented
-- `flights compare --points` (award-vs-cash comparator) - not implemented
+- `flights award-watch` (award fare-drop watcher) - not implemented; track manually by re-running `flights award-cheapest` on a schedule
 - `atmos status` (tier progress) - not implemented; use `atmos-rewards balance` for raw points
 - `flights search multi` (multi-leg composer) - not implemented; run separate `flights search` invocations per leg
 - `doctor --auth` (dedicated JWT decode flag) - not implemented; `doctor` performs the general auth check
@@ -59,6 +58,17 @@ These capabilities aren't available in any other tool for this API.
   ```bash
   alaska-airlines-pp-cli flights search --origin SFO --destination SEA --depart 2026-11-27 --json --select flights.flightNumber,flights.fares.saver.price,flights.duration
   ```
+
+### Award (miles+cash) planner
+- **`flights award-cheapest --destination-region japan --month 2026-08`** — Fan out across every (depart, return) pair in a calendar month across multiple destination airports in parallel; return the cheapest round-trip in miles.
+
+  _Solves "find me a flight to Japan using points lowest price in August" in one command instead of clicking the Alaska site N times._
+
+  ```bash
+  alaska-airlines-pp-cli flights award-cheapest --origin SFO --destination-region japan --month 2026-08 --cabin economy --max-stops 1 --json
+  ```
+
+  Built on the same `/search/results/__data.json` endpoint the cash search uses; the `--award` flag (or `flights award-search`) toggles `ShoppingMethod=onlineaward`.
 
 ## HTTP Transport
 
@@ -90,8 +100,10 @@ This CLI uses Chrome-compatible HTTP transport for browser-facing endpoints. It 
 - `alaska-airlines-pp-cli flights business` — Alaska for Business program metadata
 - `alaska-airlines-pp-cli flights et-info` — Electronic ticket info / general metadata
 - `alaska-airlines-pp-cli flights get-features` — Feature flags scoped to a user (used internally by site)
-- `alaska-airlines-pp-cli flights search` — Search flights between two airports for given dates and passenger mix. Returns the fare matrix per flight per cabin class.
+- `alaska-airlines-pp-cli flights search` — Search flights between two airports for given dates and passenger mix. Pass `--award` to switch from cash to miles+cash fares (same endpoint, `ShoppingMethod=onlineaward`).
 - `alaska-airlines-pp-cli flights shoulder-dates` — Flexible-date pricing matrix - get fares for dates near your target
+- `alaska-airlines-pp-cli flights award-search` — Single-date award fare matrix (miles + cash). Thin alias over `flights search --award`.
+- `alaska-airlines-pp-cli flights award-cheapest` — Lowest-miles-in-a-month planner. Fans out across destinations and (depart, return) pairs in parallel; returns the cheapest round-trip in miles.
 
 
 ### Finding the right command
@@ -130,6 +142,22 @@ alaska-airlines-pp-cli flights shoulder-dates --json
 ```
 
 Get fares for dates near your target departure so you can spot a cheaper shoulder date without N separate searches.
+
+### Award search for a single date
+
+```bash
+alaska-airlines-pp-cli flights award-search --origin SFO --destination HND --depart 2026-08-15 --return 2026-08-22 --cabin economy --json
+```
+
+Single-date miles+cash fare matrix. Same endpoint as cash `flights search`, just with `ShoppingMethod=onlineaward`. You can also pass `--award` to the regular `flights search` for the same effect.
+
+### Cheapest round-trip to Japan in a month using miles
+
+```bash
+alaska-airlines-pp-cli flights award-cheapest --origin SFO --destination-region japan --month 2026-08 --cabin economy --max-stops 1 --json
+```
+
+Iterates every (depart, return) pair in August across 8 Japan airports in parallel and returns the top-5 cheapest round-trips by miles. Use `--min-nights` and `--max-nights` to bound the trip length (default 5-21 nights). Use `--top-n` to control result count, `--concurrency` to tune fan-out, and `--save <path>` to persist the full result set, not just the top-N.
 
 ### Atmos Rewards balance
 

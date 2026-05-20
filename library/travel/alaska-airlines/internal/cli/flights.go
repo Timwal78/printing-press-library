@@ -19,5 +19,9 @@ func newFlightsCmd(flags *rootFlags) *cobra.Command {
 	cmd.AddCommand(newFlightsGetFeaturesCmd(flags))
 	cmd.AddCommand(newFlightsSearchCmd(flags))
 	cmd.AddCommand(newFlightsShoulderDatesCmd(flags))
+	// PATCH(amend-2026-05-19: award-search support) — wire the new award
+	// commands added by /printing-press-amend.
+	cmd.AddCommand(newFlightsAwardSearchCmd(flags))
+	cmd.AddCommand(newFlightsAwardCheapestCmd(flags))
 	return cmd
 }
