@@ -1265,6 +1265,28 @@
       }
     },
     {
+      "name": "hotel-tonight",
+      "category": "travel",
+      "api": "HotelTonight",
+      "description": "Last-minute hotel deals with a local price-history database no HotelTonight client has — snapshot deals over time,...",
+      "path": "library/travel/hotel-tonight",
+      "printer": "tmchow",
+      "printer_name": "Trevin Chow",
+      "mcp": {
+        "binary": "hotel-tonight-pp-mcp",
+        "transports": [
+          "stdio",
+          "http"
+        ],
+        "tool_count": 4,
+        "public_tool_count": 4,
+        "auth_type": "none",
+        "env_vars": [],
+        "mcp_ready": "full",
+        "spec_format": "internal"
+      }
+    },
+    {
       "name": "icloud",
       "category": "media-and-entertainment",
       "api": "iCloud",
