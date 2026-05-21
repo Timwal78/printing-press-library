@@ -13,6 +13,7 @@ import (
 var (
 	moneyRe  = regexp.MustCompile(`[$£€]\s*([0-9][0-9,]*(?:\.[0-9]{2})?)`)
 	roomIDRe = regexp.MustCompile(`/rooms/([0-9A-Za-z_-]+)`)
+	// PATCH: Recover Airbnb review counts from localized rating strings.
 	// `avgRatingLocalized` ships as "4.98 (576)"; we extract the numeric
 	// rating and review count from the parenthesized suffix when
 	// `reviewsCount` is null (which Airbnb commonly returns).
@@ -55,6 +56,7 @@ func listingFromSearch(lmap, priceQuote map[string]any) Listing {
 			l.Badges = append(l.Badges, text)
 		}
 	}
+	// PATCH: Prefer the current flat-card price field, with legacy fallback.
 	// Airbnb ships search-result prices under `structuredStayDisplayPrice`
 	// (legacy nested-under-pricingQuote shape) OR `structuredDisplayPrice`
 	// (current flat-card shape, where each searchResults entry carries the
@@ -78,6 +80,7 @@ func listingFromSearch(lmap, priceQuote map[string]any) Listing {
 		}
 	}
 	enrichCounts(&l, lmap)
+	// PATCH: Backfill missing flat-card review counts from rating labels.
 	// Airbnb commonly returns `reviewsCount: null` on the flat search-result
 	// shape, with the count buried inside `avgRatingLocalized` (e.g.
 	// "4.98 (576)") or `avgRatingA11yLabel` ("4.98 out of 5 average rating,
@@ -99,6 +102,7 @@ func listingFromSearch(lmap, priceQuote map[string]any) Listing {
 			}
 		}
 	}
+	// PATCH: Read flat-card location lines from structuredContent.
 	// On the flat shape, location lines live under `structuredContent`
 	// rather than as top-level `primaryLine` / `secondaryLine` arrays.
 	if len(l.PrimaryLine) == 0 {

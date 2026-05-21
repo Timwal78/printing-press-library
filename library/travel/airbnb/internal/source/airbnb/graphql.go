@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/mvanhorn/printing-press-library/library/travel/airbnb/internal/auth"
 )
@@ -27,6 +28,7 @@ const (
 	// helper below tries to read a fresh value at process startup, but
 	// falls back to this constant if the scrape fails.
 	airbnbDefaultAPIKey = "d306zoyjsyarp7ifhu67rjxn52tv0t20"
+	apiKeyScrapeTimeout = 30 * time.Second
 )
 
 // apiKeyRe finds the public web key in airbnb.com SSR HTML.
@@ -37,13 +39,16 @@ var (
 	apiKeyVal  string
 )
 
+// PATCH: Resolve Airbnb's rotating public GraphQL key from fresh SSR HTML.
 // resolveAPIKey returns the current Airbnb web public API key. It scrapes
 // the homepage SSR HTML on first use (cached for the process lifetime),
 // and falls back to the well-known constant if the scrape fails.
-func (c *Client) resolveAPIKey(ctx context.Context) string {
+func (c *Client) resolveAPIKey() string {
 	apiKeyOnce.Do(func() {
 		apiKeyVal = airbnbDefaultAPIKey
-		body, err := c.do(ctx, "GET", airbnbBase+"/", airbnbUA, nil, nil)
+		scrapeCtx, cancel := context.WithTimeout(context.Background(), apiKeyScrapeTimeout)
+		defer cancel()
+		body, err := c.do(scrapeCtx, "GET", airbnbBase+"/", airbnbUA, nil, nil)
 		if err != nil {
 			return
 		}
@@ -138,6 +143,7 @@ func (c *Client) graphQLGet(ctx context.Context, path string, params url.Values,
 	}
 	q.Set("extensions", `{"persistedQuery":{"version":1,"sha256Hash":"`+path[strings.LastIndex(path, "/")+1:]+`"}}`)
 	u.RawQuery = q.Encode()
+	// PATCH: Send Airbnb's public web GraphQL key and browser companion headers.
 	// The Airbnb GraphQL gateway rejects requests without an api key with
 	// {error:"invalid_key", error_code:400}. Send the public web key plus
 	// the companion headers every real-world request carries (per the HAR
@@ -145,7 +151,7 @@ func (c *Client) graphQLGet(ctx context.Context, path string, params url.Values,
 	// them, Airbnb's heuristics flag the call as non-browser.
 	headers := map[string]string{
 		"Accept":                           "application/json",
-		"X-Airbnb-API-Key":                 c.resolveAPIKey(ctx),
+		"X-Airbnb-API-Key":                 c.resolveAPIKey(),
 		"X-Airbnb-GraphQL-Platform":        "web",
 		"X-Airbnb-GraphQL-Platform-Client": "minimalist-niobe",
 		"X-Airbnb-Supports-Airlock-V2":     "true",

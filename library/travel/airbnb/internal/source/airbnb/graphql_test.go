@@ -1,6 +1,12 @@
 package airbnb
 
-import "testing"
+import (
+	"io"
+	"net/http"
+	"strings"
+	"sync"
+	"testing"
+)
 
 // TestParseAPIKeyFromSSR confirms the regex extracts the api_config key
 // embedded in airbnb.com SSR HTML.
@@ -43,4 +49,46 @@ func TestAirbnbDefaultAPIKey(t *testing.T) {
 	if len(airbnbDefaultAPIKey) < 20 {
 		t.Fatalf("airbnbDefaultAPIKey too short: %q", airbnbDefaultAPIKey)
 	}
+}
+
+// TestResolveAPIKeyIgnoresCallerCancellation ensures the process-wide scrape
+// is not poisoned by whichever request happens to trigger it first.
+func TestResolveAPIKeyIgnoresCallerCancellation(t *testing.T) {
+	apiKeyOnce = sync.Once{}
+	apiKeyVal = ""
+	t.Cleanup(func() {
+		apiKeyOnce = sync.Once{}
+		apiKeyVal = ""
+	})
+
+	called := false
+	c := &Client{
+		http: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			called = true
+			if err := req.Context().Err(); err != nil {
+				t.Fatalf("homepage scrape inherited canceled caller context: %v", err)
+			}
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(strings.NewReader(`"api_config":{"key":"freshkey1234567890abcdef","baseUrl":"/api"}`)),
+				Header:     make(http.Header),
+				Request:    req,
+			}, nil
+		})},
+		limiter: defaultClient.limiter,
+	}
+
+	got := c.resolveAPIKey()
+	if got != "freshkey1234567890abcdef" {
+		t.Fatalf("resolveAPIKey = %q, want fresh key from scrape", got)
+	}
+	if !called {
+		t.Fatal("resolveAPIKey did not try the homepage scrape")
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
 }

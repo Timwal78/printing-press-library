@@ -98,6 +98,7 @@ func (c *Client) Search(ctx context.Context, params SearchParams) ([]Listing, *P
 			}
 			lmap = merged
 		}
+		// PATCH: Treat flat Airbnb SSR search-result cards as their own price quote.
 		// Airbnb's current SSR Apollo cache returns search-result entries
 		// in a flat shape where the listing card carries `structuredDisplayPrice`
 		// directly (no `pricingQuote` envelope). Fall back to `obj` itself so
