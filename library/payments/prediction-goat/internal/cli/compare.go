@@ -211,14 +211,12 @@ func runComparePair(cmd *cobra.Command, flags *rootFlags, db *store.Store, topic
 	kalshiRow, kalshiOk := lookupRawMarket(cmd, db, "kalshi_markets", kalshiTicker)
 	if !pmOk || !kalshiOk {
 		result := compareResult{Topic: topic, Reason: "explicit_pair_not_found"}
-		if !pmOk || !kalshiOk {
-			result.Unpaired = &compareUnpaired{Polymarket: []compareVenue{}, Kalshi: []compareVenue{}}
-			if pmOk {
-				result.Unpaired.Polymarket = append(result.Unpaired.Polymarket, compareVenueFromRaw(pmRow))
-			}
-			if kalshiOk {
-				result.Unpaired.Kalshi = append(result.Unpaired.Kalshi, compareVenueFromRaw(kalshiRow))
-			}
+		result.Unpaired = &compareUnpaired{Polymarket: []compareVenue{}, Kalshi: []compareVenue{}}
+		if pmOk {
+			result.Unpaired.Polymarket = append(result.Unpaired.Polymarket, compareVenueFromRaw(pmRow))
+		}
+		if kalshiOk {
+			result.Unpaired.Kalshi = append(result.Unpaired.Kalshi, compareVenueFromRaw(kalshiRow))
 		}
 		if flags.asJSON || !isTerminal(cmd.OutOrStdout()) {
 			_ = printJSONFiltered(cmd.OutOrStdout(), result, flags)

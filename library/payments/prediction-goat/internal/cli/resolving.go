@@ -3,6 +3,7 @@
 package cli
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -27,12 +28,12 @@ func newResolvingCmd(flags *rootFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if week && month {
+				return usageErr(fmt.Errorf("resolving: --week and --month are mutually exclusive (also use --days N to override)"))
+			}
 			windowDays := 7
 			if month {
 				windowDays = 30
-			}
-			if week {
-				windowDays = 7
 			}
 			if days > 0 {
 				windowDays = days
