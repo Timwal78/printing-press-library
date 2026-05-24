@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "generated_at": "2026-04-27T19:52:44.755077Z",
-  "printing_press_version": "2.3.9",
+  "printing_press_version": "4.14.0+learn-loop",
   "api_name": "company-goat",
   "cli_name": "company-goat-pp-cli",
   "printer": "tmchow",
