@@ -82,8 +82,8 @@ func TestMigrate_LearningsQueryEntities_FreshDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read schema version: %v", err)
 	}
-	if v != 4 {
-		t.Fatalf("fresh db version = %d, want 4", v)
+	if v != StoreSchemaVersion {
+		t.Fatalf("fresh db version = %d, want %d", v, StoreSchemaVersion)
 	}
 	if !hasColumn(t, s.DB(), "search_learnings", "query_entities") {
 		t.Fatalf("query_entities column missing from fresh-DB search_learnings")
@@ -111,8 +111,8 @@ func TestMigrate_LearningsQueryEntities_UpgradeFromV3(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read schema version: %v", err)
 	}
-	if v != 4 {
-		t.Fatalf("upgraded db version = %d, want 4", v)
+	if v != StoreSchemaVersion {
+		t.Fatalf("upgraded db version = %d, want %d", v, StoreSchemaVersion)
 	}
 	if !hasColumn(t, s.DB(), "search_learnings", "query_entities") {
 		t.Fatalf("query_entities column missing after v3->v4 upgrade")
