@@ -20,8 +20,20 @@ import (
 
 	"github.com/mvanhorn/printing-press-library/library/payments/prediction-goat/internal/learn"
 	"github.com/mvanhorn/printing-press-library/library/payments/prediction-goat/internal/learn/entities"
+	"github.com/mvanhorn/printing-press-library/library/payments/prediction-goat/internal/learn/lookups"
+	"github.com/mvanhorn/printing-press-library/library/payments/prediction-goat/internal/learn/lookups/seeds"
 	sqlite "modernc.org/sqlite"
 )
+
+// lookupSeeds returns the canonical seed rows the v4->v5 migration
+// inserts into entity_lookups. Indirected through a function (rather
+// than directly calling seeds.Seeds()) so the import stays scoped to
+// migration code paths; a future refactor that wants to gate on a
+// build tag (e.g., a minimal CLI variant that ships without the
+// seed payload) only has to change this one shim.
+func lookupSeeds() []lookups.LookupRow {
+	return seeds.Seeds()
+}
 
 // PATCH(wal-pragmas-via-hook): the DSN-level pragma syntax
 // (_journal_mode=WAL, _busy_timeout=5000, etc.) is silently ignored by
@@ -84,7 +96,7 @@ func IsUUID(s string) bool {
 // shape — adding columns, dropping indexes, changing FTS5 tokenizers —
 // so an older binary refuses to open a newer database rather than silently
 // producing wrong results against a schema it cannot read.
-const StoreSchemaVersion = 4
+const StoreSchemaVersion = 5
 
 const resourcesFTSCreateSQL = `CREATE VIRTUAL TABLE IF NOT EXISTS resources_fts USING fts5(
 	id, resource_type, content, tokenize='porter unicode61'
@@ -1162,6 +1174,30 @@ func (s *Store) migrate(ctx context.Context) error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_learn_query ON search_learnings(query_pattern)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_learn_unique ON search_learnings(query_pattern, resource_id, action)`,
+		// entity_lookups (v5): canonical-to-value reference data for
+		// the recipe substitution engine in internal/learn/recipes.
+		// Seeded at v4->v5 migration time with ISO 3166-1 country
+		// codes and current-season major-league sports team
+		// abbreviations (~900 rows); per-user additions land via the
+		// `teach-lookup` CLI command with source='taught'. PK is the
+		// (kind, canonical, value) triple so multiple aliases under
+		// the same kind (e.g., "USA" and "United States" both ->
+		// "US" under country_iso2) coexist without collision.
+		//
+		// Computed kinds (lowercase, kebab-case, capitalize-first,
+		// uppercase, slug) bypass this table entirely; see
+		// internal/learn/lookups/store.go::computedLookup. They have
+		// no rows here.
+		`CREATE TABLE IF NOT EXISTS entity_lookups (
+			kind TEXT NOT NULL,
+			canonical TEXT NOT NULL,
+			value TEXT NOT NULL,
+			source TEXT NOT NULL DEFAULT 'seeded',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (kind, canonical, value)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_entity_lookup_canonical ON entity_lookups(canonical)`,
+		`CREATE INDEX IF NOT EXISTS idx_entity_lookup_kind ON entity_lookups(kind)`,
 	}
 
 	// Run every migration — including the column backfill and the
@@ -1216,6 +1252,21 @@ func (s *Store) migrate(ctx context.Context) error {
 		if current < 4 {
 			if err := s.migrateLearningsQueryEntities(ctx, conn); err != nil {
 				return fmt.Errorf("migrating learnings query_entities (v3->v4): %w", err)
+			}
+		}
+
+		// v4->v5: entity_lookups seed batch. The table itself is
+		// created by the migrations[] CREATE TABLE IF NOT EXISTS
+		// loop above; this step inserts the seeded country and
+		// sports rows under INSERT OR IGNORE so a re-Open is a no-op
+		// (every triple is a PK conflict on second pass). Gated on
+		// `current < 5` to avoid re-running the 900-row insert on
+		// every Open. See internal/learn/lookups for the full
+		// design rationale (table is canonical reference data, NOT
+		// domain logic; future CLIs can lift the package).
+		if current < 5 {
+			if err := s.migrateEntityLookupsSeed(ctx, conn); err != nil {
+				return fmt.Errorf("seeding entity_lookups (v4->v5): %w", err)
 			}
 		}
 
@@ -1315,6 +1366,55 @@ func (s *Store) migrateLearningsQueryEntities(ctx context.Context, conn *sql.Con
 			entitiesJSON, r.id,
 		); err != nil {
 			return fmt.Errorf("update query_entities for learning %d: %w", r.id, err)
+		}
+	}
+	return nil
+}
+
+// migrateEntityLookupsSeed inserts the seeded country/sports rows
+// returned by seeds.Seeds() into the entity_lookups table using
+// INSERT OR IGNORE. The table itself is created by the migrations[]
+// loop above this function's call site; here we only load reference
+// data.
+//
+// Idempotency: re-running this on an already-seeded DB inserts zero
+// rows — every (kind, canonical, value) triple is a PRIMARY KEY
+// conflict and the OR IGNORE clause silences each one. The migration
+// is gated on `current < 5` in migrate() so the read pass also
+// short-circuits on already-upgraded DBs, but the OR IGNORE
+// guarantee is what makes a partial mid-flight failure safe to
+// retry: any row that committed stays; the rest re-run cleanly.
+//
+// A prepared statement keeps the per-row overhead near a no-op; with
+// ~900 seed rows this completes in well under a second on cold
+// SQLite. The whole insert runs inside the outer migration
+// transaction (withMigrationLock's BEGIN IMMEDIATE) so the
+// version-stamp + the seed inserts are atomic — a power-loss between
+// the table CREATE and the seed inserts cannot leave the DB at v5
+// with an empty entity_lookups.
+//
+// Why we don't call lookups.SeedBatch: that helper takes a *sql.Tx,
+// which would nest inside the outer BEGIN IMMEDIATE that
+// withMigrationLock holds. SQLite does not support nested
+// transactions in the standard library's database/sql shape; we run
+// the inserts directly on conn and let the outer tx carry them.
+func (s *Store) migrateEntityLookupsSeed(ctx context.Context, conn *sql.Conn) error {
+	stmt, err := conn.PrepareContext(ctx, `
+		INSERT OR IGNORE INTO entity_lookups (kind, canonical, value, source)
+		VALUES (?, ?, ?, ?)
+	`)
+	if err != nil {
+		return fmt.Errorf("prepare entity_lookups seed insert: %w", err)
+	}
+	defer stmt.Close()
+
+	for _, r := range lookupSeeds() {
+		source := r.Source
+		if source == "" {
+			source = "seeded"
+		}
+		if _, err := stmt.ExecContext(ctx, r.Kind, r.Canonical, r.Value, source); err != nil {
+			return fmt.Errorf("seed entity_lookup (%s, %s, %s): %w", r.Kind, r.Canonical, r.Value, err)
 		}
 	}
 	return nil
