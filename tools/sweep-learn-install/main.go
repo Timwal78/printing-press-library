@@ -459,17 +459,42 @@ func planSweep(ctx sweepCtx, rootData, storeData []byte) (sweepPlan, error) {
 	plan.StoreChanged = storeChanged
 
 	skillPath := filepath.Join(ctx.CLIDir, "SKILL.md")
-	if skillData, err := os.ReadFile(skillPath); err == nil {
+	skillData, err := os.ReadFile(skillPath)
+	switch {
+	case err == nil:
 		skillAfter := patchSkillLearnSection(string(skillData), ctx)
 		plan.SkillAfter = skillAfter
 		plan.SkillChanged = skillAfter != string(skillData)
+	case os.IsNotExist(err):
+		// SKILL.md is optional — a small number of older library CLIs
+		// don't ship one. Skip the patch silently in that case.
+	default:
+		// Permission / read errors mean we'd ship a `statusPatched`
+		// result while silently skipping the agent-facing skill
+		// instructions. Surface the error so the sweep aborts rather
+		// than reporting a clean retrofit.
+		return plan, fmt.Errorf("read SKILL.md: %w", err)
 	}
 
 	goModPath := filepath.Join(ctx.CLIDir, "go.mod")
-	if goModData, err := os.ReadFile(goModPath); err == nil {
+	goModData, err := os.ReadFile(goModPath)
+	switch {
+	case err == nil:
 		if !strings.Contains(string(goModData), "modernc.org/sqlite") {
 			plan.GoModTidy = true
 		}
+	case os.IsNotExist(err):
+		// A CLI without a go.mod is out of scope for the sweep (the
+		// retrofit emits internal/learn/*.go files that need a Go
+		// module). The sweep gates above already require go.mod for
+		// canonical CLIs; this path is reachable only on inputs the
+		// caller has explicitly allowed through.
+	default:
+		// Same shape as SKILL.md: permission / read errors here would
+		// leave the new internal/learn files (transitively requiring
+		// modernc.org/sqlite) on disk while `go mod tidy` is never
+		// queued. Surface rather than skip silently.
+		return plan, fmt.Errorf("read go.mod: %w", err)
 	}
 
 	manifestPath := filepath.Join(ctx.CLIDir, ".printing-press.json")

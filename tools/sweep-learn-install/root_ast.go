@@ -190,6 +190,13 @@ func patchRootAST(src string, ctx sweepCtx) (string, bool, error) {
 	if added, ok := injectNoLearnPersistentFlag(out); ok {
 		out = added
 		changed = true
+	} else if !strings.Contains(out, `BoolVar(&flags.noLearn, "no-learn"`) {
+		// Anchor not found and binding not already present — refuse
+		// rather than write a partially-patched file where --no-learn
+		// is wired into the struct but the cobra binding never sets
+		// it. A `SWEPT` status on such a CLI would silently ship a
+		// non-functional --no-learn flag.
+		return src, false, fmt.Errorf("root.go has no rootCmd.PersistentFlags() call: cannot inject --no-learn binding")
 	}
 	if added, ok := injectLearnAddCommands(out, ctx); ok {
 		out = added
