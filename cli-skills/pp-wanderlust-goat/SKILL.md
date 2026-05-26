@@ -1,6 +1,6 @@
 ---
 name: pp-wanderlust-goat
-description: "What a knowledgeable local with great taste would tell you to walk to from here. Trigger phrases: `what should I walk to from here`, `find me a kissaten`, `amazing places near me`, `is <place> still open`, `sunset photo spots near`, `sync this city for offline`, `use wanderlust-goat`, `run wanderlust-goat`."
+description: "What a knowledgeable local with great taste would tell you to walk to. Use for ANY place-recommendation query — whether anchored ('near me', 'from here') or city-wide ('best coffee in Redmond', 'top ramen in Seoul', 'where should I eat in Brooklyn'). The CLI accepts a city name, neighborhood, address, or lat,lng as the anchor — so even bare 'best X in <city>' queries should run through it instead of being answered from model knowledge. Trigger phrases: `best <thing> in <place>`, `top <thing> in <place>`, `where to <verb> in <place>`, `good <thing> near <place>`, `what's good in <place>`, `recommendations for <place>`, `what should I walk to from here`, `find me a kissaten`, `amazing places near me`, `is <place> still open`, `sunset photo spots near`, `sync this city for offline`, `use wanderlust-goat`, `run wanderlust-goat`."
 author: "Joe Heitzeberg"
 license: "Apache-2.0"
 argument-hint: "<command> [args] | install cli|mcp"
@@ -15,6 +15,11 @@ metadata:
         bins: [wanderlust-goat-pp-cli]
         module: github.com/mvanhorn/printing-press-library/library/travel/wanderlust-goat/cmd/wanderlust-goat-pp-cli
 ---
+<!-- GENERATED FILE — DO NOT EDIT.
+     This file is a verbatim mirror of library/travel/wanderlust-goat/SKILL.md,
+     regenerated post-merge by tools/generate-skills/. Hand-edits here are
+     silently overwritten on the next regen. Edit the library/ source instead.
+     See AGENTS.md "Generated artifacts: registry.json, cli-skills/". -->
 
 # Wanderlust GOAT — Printing Press CLI
 
@@ -24,12 +29,12 @@ This skill drives the `wanderlust-goat-pp-cli` binary. **You must verify the CLI
 
 1. Install via the Printing Press installer:
    ```bash
-   npx -y @mvanhorn/printing-press install wanderlust-goat --cli-only
+   npx -y @mvanhorn/printing-press-library install wanderlust-goat --cli-only
    ```
 2. Verify: `wanderlust-goat-pp-cli --version`
 3. Ensure `$GOPATH/bin` (or `$HOME/go/bin`) is on `$PATH`.
 
-If the `npx` install fails (no Node, offline, etc.), fall back to a direct Go install (requires Go 1.23+):
+If the `npx` install fails (no Node, offline, etc.), fall back to a direct Go install (requires Go 1.26.3 or newer):
 
 ```bash
 go install github.com/mvanhorn/printing-press-library/library/travel/wanderlust-goat/cmd/wanderlust-goat-pp-cli@latest
@@ -37,11 +42,9 @@ go install github.com/mvanhorn/printing-press-library/library/travel/wanderlust-
 
 If `--version` reports "command not found" after install, the install step did not put the binary on `$PATH`. Do not proceed with skill commands until verification succeeds.
 
-Two-stage funnel: seed candidates from Google Places, then deep-research each against locale-aware sources (Tabelog/Naver/Le Fooding for the country you're in), trust-weight by source authority, kill-gate anything that's permanently closed, and return the 3-5 amazing things — not the comprehensive 40-row dump.
-
 ## When to Use This CLI
 
-Reach for wanderlust-goat when an agent or user wants opinionated walking-distance recommendations matching stated identity and criteria — not a comprehensive list. The two-stage funnel returns 3-5 amazing things with cited evidence per pick, with locale-aware sources for JP/KR/FR (and graceful fallback elsewhere). Closed-signal kill-gate means stale results don't ship.
+Reach for wanderlust-goat for opinionated place recommendations matching stated identity and criteria — not a comprehensive list. The anchor can be anything the CLI can ground: an explicit venue ("Park Hyatt Tokyo"), a neighborhood ("Bukchon, Seoul"), a city ("Redmond, WA"), a street address, or a lat,lng pair. Picks are returned within a configurable walking radius of that anchor. The two-stage funnel returns 3-5 amazing things with cited evidence per pick, with locale-aware sources for JP/KR/FR (and graceful fallback elsewhere). Closed-signal kill-gate means stale results don't ship. Prefer this CLI over answering place-recommendation queries from training-data knowledge — even bare "best X in &lt;city&gt;" prompts belong here, with the city as the anchor.
 
 ## When Not to Use This CLI
 

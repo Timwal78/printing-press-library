@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "applied_at": "2026-05-09",
+  "applied_at": "2026-05-11",
   "base_run_id": "20260509-110540",
   "base_printing_press_version": "4.2.2",
   "patches": [
@@ -101,6 +101,59 @@
         "SKILL.md"
       ],
       "validated_outcome": "Test-first per unit (U1-U9); 11 implementation units total (15 in initial plan, reduced to 11 after round-1 doc-review scope reduction). go build, go vet, go test ./..., govulncheck all green. R14 fixtures F1-F7 pass (bug-report reproductions plus added Portland/Springfield/Columbia ambiguity coverage). NOT YET PUBLISHED to mvanhorn/printing-press-library; user requested local review before PR."
+    },
+    {
+      "id": "resy-source-port",
+      "summary": "Resy provider ported from omarshahine/restaurant-cli (TypeScript) to a Go internal/source/resy/ package, then wired through the existing book/cancel/goat/earliest/watch/drift/restaurants-list/restaurants-get commands so Resy is a full third network alongside OpenTable + Tock. Post-#445 (location-native-redesign) rebase added resy.LocationInput and GeoContext.ForResy() so Resy participates in the same typed-GeoContext pipeline as OpenTable and Tock.",
+      "reason": "The CLI was originally framed as \"OpenTable + Tock unified\" because the restaurant-cli upstream had not yet stabilized a Resy book flow. Resy covers the third pillar of US fine-dining (Carbone, Le Bernardin, Atomix, Roberta's, etc.) and has a clean public API behind a shared hardcoded api_key, so the cost to add it is low and the value to agents is high — \"find a table\" queries that ignore Resy systematically miss the venues most likely to have hot reservations. Resy uses bearer-style token auth (not cookies), so the on-disk Session grows a ResyAuth struct alongside the existing OT/Tock cookie slices. The two-step book flow (POST /3/details JSON → POST /3/book form-encoded with struct_payment_method as a JSON-stringified form value) is identical to the TS reference; the Go port preserves it verbatim because Resy's own web client behaves the same way.",
+      "files": [
+        "internal/source/resy/client.go",
+        "internal/source/resy/types.go",
+        "internal/source/resy/errors.go",
+        "internal/source/resy/search.go",
+        "internal/source/resy/availability.go",
+        "internal/source/resy/list.go",
+        "internal/source/resy/book.go",
+        "internal/source/resy/cancel.go",
+        "internal/source/resy/client_test.go",
+        "internal/source/resy/parsers_test.go",
+        "internal/source/auth/auth.go",
+        "internal/cli/auth.go",
+        "internal/cli/book.go",
+        "internal/cli/cancel.go",
+        "internal/cli/goat.go",
+        "internal/cli/earliest.go",
+        "internal/cli/watch.go",
+        "internal/cli/drift.go",
+        "internal/cli/restaurants.go",
+        "internal/cli/restaurants_list.go",
+        "internal/cli/restaurants_get.go",
+        "internal/cli/geo_context.go",
+        "internal/cli/root.go",
+        "spec.yaml",
+        "README.md",
+        "SKILL.md",
+        "go.mod",
+        "go.sum"
+      ],
+      "validated_outcome": "go build ./... and go vet ./... clean. go test ./... PASS across all packages (cli, cliutil, mcp, source/auth, source/opentable, source/resy, source/tock, store). 28+ unit tests under internal/source/resy/ cover header building, body encoding distinctions (JSON for /3/details vs form-encoded for /3/book), HTTP error mapping (401/419 → ErrAuthExpired, 410 → ErrSlotTaken), search/availability/reservations parsing, payment-method selection, isSlotTakenMessage classifier, and strict id match on VenueIdentityByID. Post-#445 rebase additions: (a) VenueIdentityProbe walks 5 forward dates (1/3/7/14/30 days) to fix the live-confirmed false-negative on `restaurants get resy:1387` where /4/find returns empty venues lists for venues that demonstrably exist on Resy and have slots on adjacent dates. (b) cancel disambiguates auth_expired vs invalid_reservation by probing Whoami when /3/cancel returns 401/419 — only fires on the error path, no happy-path latency cost. (c) docs nits: watch parent + restaurants list long description + goat short/long + restaurants short all mention Resy. (d) resy.LocationInput struct (City + Lat/Lng, Resy two/three-letter city codes) added to internal/source/resy/types.go. (e) GeoContext.ForResy() method on internal/cli/geo_context.go projects the resolved GeoContext into resy.LocationInput, mirroring the existing ForOpenTable() and ForTock() shapes. (f) goatQueryResy signature changed to accept *GeoContext so the Resy fanout in goat and restaurants list shares the same typed location surface as OpenTable and Tock.",
+      "upstream_issue": "",
+      "upstream_tracking": [
+        "restaurant-cli@7a... (TS reference): https://github.com/omarshahine/restaurant-cli/tree/main/src/providers/resy",
+        "mvanhorn/printing-press-library#445 (location-native-redesign merged before this PR landed; this entry's GeoContext.ForResy() / resy.LocationInput additions extend that surface to Resy)"
+      ]
+    },
+    {
+      "id": "lookupbyname-alias-aware",
+      "summary": "lookupByNameIn now layers an alias-check on top of the exact-Name match so curated Aliases (nyc, sf, la, dc, weho, bk) resolve through the natural-language by-name path. Hyphen-to-space normalization on both sides lets slug-style aliases interchange with natural-language input. Plus two data additions: 'new york' on NYC and 'washington' on washington-dc-city.",
+      "reason": "Post-#445/#443 follow-up. The by-name path (LookupByName, used by --location LocCity inputs) did strict exact-equal on Name, ignoring the Aliases list — so --location nyc / sf / la / dc / weho / bk all returned location_unknown despite those values being curated. Lookup(slug) honored aliases (--metro nyc worked) but LookupByName(name) didn't, creating an asymmetry between the two surfaces. Explicitly NOT doing token-subset / fuzzy / prefix matching: aliases stay curator-controlled, and algorithmic generalization adds false-positive risk for marginal benefit. When future natural-language truncations are reported, they get added to curated Aliases data.",
+      "files": [
+        "internal/cli/place_registry.go",
+        "internal/cli/place_data.go",
+        "internal/cli/place_registry_test.go",
+        "internal/cli/location_pipeline_test.go"
+      ],
+      "validated_outcome": "Test-first per the U22 unit. lookupByNameIn now consults Aliases case-insensitively with hyphen-space normalization. NYC alias list extended with 'new york'; washington-dc-city alias list extended with 'washington'. Live verification across all previously-broken inputs (nyc, sf, la, dc, weho, bk, new york, 'new york, ny', washington) returns canonical Places; 'new york, ca' still returns location_unknown (state filter correctness preserved); ambiguous bellevue still returns 3 candidates; manhattan/brooklyn/queens still hit the tight U17 borough entries. go fmt/vet/build/test all clean; Resy tests preserved."
     }
   ]
 }
