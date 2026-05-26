@@ -155,6 +155,159 @@ func TestExtract_SingleTeach_NoRecipe(t *testing.T) {
 	}
 }
 
+// TestExtract_MultiEntity_NoSingleSlotRecipe is the multi-entity
+// anyMulti guard: a pair of multi-entity rows that share a structural
+// stem must not synthesize a single-slot template. tryExactBinding /
+// tryPrefixBinding both index queryEntities[0] only — emitting a
+// single-slot recipe against a multi-entity row would silently bake
+// the second entity into prefix/suffix as a literal and over-match
+// future queries. The guard skips inference for groups whose members
+// carry more than one entity; multi-entity templating is future work.
+//
+// Multi-entity rows are still allowed past the entity-count check at
+// collection time so they participate in grouping (the structural form
+// strips all entities, so a multi-entity row shares the same stem as
+// the single-entity rows in its bucket). That's what enables future
+// multi-entity binding without re-bucketing teaches.
+func TestExtract_MultiEntity_NoSingleSlotRecipe(t *testing.T) {
+	t.Parallel()
+	s := openTestStore(t)
+
+	// Two multi-entity teaches with the same shape. Both have len
+	// (QueryEntities) > 1, so the anyMulti guard fires and inference
+	// is skipped.
+	if _, _, err := s.UpsertLearning(store.UpsertLearningInput{
+		Query:         "tonight Mariners vs Yankees",
+		QueryEntities: []string{"Mariners", "Yankees"},
+		ResourceID:    "event-mariners-yankees-2026-05-26",
+		ResourceType:  "events",
+		Source:        store.LearningSourceTaught,
+	}); err != nil {
+		t.Fatalf("teach 1: %v", err)
+	}
+	if _, _, err := s.UpsertLearning(store.UpsertLearningInput{
+		Query:         "tonight Mets vs Cubs",
+		QueryEntities: []string{"Mets", "Cubs"},
+		ResourceID:    "event-mets-cubs-2026-05-26",
+		ResourceType:  "events",
+		Source:        store.LearningSourceTaught,
+	}); err != nil {
+		t.Fatalf("teach 2: %v", err)
+	}
+
+	if _, err := recipes.Extract(s.DB()); err != nil {
+		t.Fatalf("extract: %v", err)
+	}
+	rows, err := recipes.List(s.DB(), recipes.ListFilter{})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(rows) != 0 {
+		t.Errorf("multi-entity teaches should not emit a single-slot recipe; got %+v", rows)
+	}
+}
+
+// TestExtract_MultiEntityPoisonsSingleEntityGroup verifies the
+// anyMulti guard checks every member of a group, not just the first.
+// A multi-entity row that lands in the same structural bucket as two
+// single-entity rows must block inference for that whole group.
+// Otherwise a stray multi-entity teach in a shape-peer cluster would
+// produce a single-slot template that drops the multi-entity row's
+// second entity on the floor.
+func TestExtract_MultiEntityPoisonsSingleEntityGroup(t *testing.T) {
+	t.Parallel()
+	s := openTestStore(t)
+
+	// Two single-entity rows that would normally pair into a
+	// substitute-strategy recipe.
+	teachOne(t, s, "odds Portugal wins world cup", "kalshi_markets", "KXMENWORLDCUP-26-PT")
+	teachOne(t, s, "odds USA wins world cup", "kalshi_markets", "KXMENWORLDCUP-26-US")
+
+	// A multi-entity teach in the same structural shape: after
+	// stripping both entities from the query_pattern, the stem is
+	// identical to the two single-entity rows ("cup wins world"
+	// after the "odds" stopword drops). Hand-build the entities
+	// slice so the row is unambiguously multi-entity regardless of
+	// what the extractor would have produced. The structural-form
+	// equality forces it into the same bucket; the anyMulti guard
+	// must still fire and skip inference for the whole group.
+	if _, _, err := s.UpsertLearning(store.UpsertLearningInput{
+		Query:         "odds England Brazil wins world cup",
+		QueryEntities: []string{"England", "Brazil"},
+		ResourceID:    "KXMENWORLDCUP-26-GB-BR",
+		ResourceType:  "kalshi_markets",
+		Source:        store.LearningSourceTaught,
+	}); err != nil {
+		t.Fatalf("teach multi: %v", err)
+	}
+
+	if _, err := recipes.Extract(s.DB()); err != nil {
+		t.Fatalf("extract: %v", err)
+	}
+
+	// The kalshi_markets group now has 3 members but one is multi-
+	// entity, so anyMulti fires and we get no recipe rows.
+	rows, err := recipes.List(s.DB(), recipes.ListFilter{})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	for _, r := range rows {
+		if r.ResourceType == "kalshi_markets" {
+			t.Errorf("kalshi_markets group should be skipped due to multi-entity member; got %+v", r)
+		}
+	}
+}
+
+// TestExtract_SingleEntityPathStillWorks is the regression guard for
+// U4: after generalizing queryStructural / buildQueryTemplate to take
+// an entity slice, two single-entity teaches in the same shape must
+// still produce a template that a fresh single-entity query in the
+// same shape would match via the apply path. This is structurally
+// covered by TestExtract_KalshiCountryTicker_ExactSubstitute today
+// but called out explicitly here as the "single-slot path is not
+// regressed" check the U4 plan asks for.
+func TestExtract_SingleEntityPathStillWorks(t *testing.T) {
+	t.Parallel()
+	s := openTestStore(t)
+
+	teachOne(t, s, "odds Portugal wins world cup", "kalshi_markets", "KXMENWORLDCUP-26-PT")
+	teachOne(t, s, "odds USA wins world cup", "kalshi_markets", "KXMENWORLDCUP-26-US")
+
+	if _, err := recipes.Extract(s.DB()); err != nil {
+		t.Fatalf("extract: %v", err)
+	}
+
+	rows, err := recipes.List(s.DB(), recipes.ListFilter{ResourceType: "kalshi_markets"})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(rows) == 0 {
+		t.Fatalf("two single-entity teaches should produce >= 1 recipe (regression: U4 multi-entity refactor must not break single-entity path)")
+	}
+	// The query template must carry exactly one {entity} placeholder
+	// and the non-entity stem tokens, sorted. We assert the shape
+	// rather than an exact string so the test stays resilient to
+	// future stem additions.
+	var got *recipes.Recipe
+	for i := range rows {
+		if rows[i].EntityKind == "country_iso2" && rows[i].Strategy == recipes.StrategySubstitute {
+			got = &rows[i]
+			break
+		}
+	}
+	if got == nil {
+		t.Fatalf("expected a country_iso2 substitute recipe; got %+v", rows)
+	}
+	// The normalize layer drops "odds" as a domain stopword, so the
+	// non-entity stem is "cup wins world" after stripping the
+	// entity. Template is the stem + a single {entity} placeholder,
+	// all alphabetized.
+	wantTemplate := "cup wins world {entity}"
+	if got.QueryTemplate != wantTemplate {
+		t.Errorf("query_template = %q, want %q", got.QueryTemplate, wantTemplate)
+	}
+}
+
 // TestExtract_Idempotent asserts that running Extract twice over the
 // same data does not create duplicate rows. The second pass should
 // bump confidence on the existing recipe and leave the row count

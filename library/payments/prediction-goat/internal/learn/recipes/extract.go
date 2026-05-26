@@ -117,14 +117,16 @@ func Extract(db *sql.DB) (int, error) {
 		if len(ents) == 0 {
 			continue
 		}
-		// Recipes are single-entity-slot only for now. Multi-entity
-		// rows are skipped because templating multiple slots needs a
-		// joint binding search that the current algorithm doesn't do.
-		// Tracked as future work; the unit tests assert single-entity
-		// rows do produce recipes.
-		if len(ents) > 1 {
-			continue
-		}
+		// Multi-entity rows flow through to grouping so the structural
+		// form generalizes correctly (a multi-entity row about "$HOME
+		// vs $AWAY tonight" shares the same stripped stem as the same-
+		// shape single-entity rows in nearby teaches and shouldn't
+		// split that stem just because it has two entities). Inference
+		// itself is single-slot today and skips multi-entity groups via
+		// the anyMulti guard below; this preserves the existing
+		// binding-search behavior while letting the grouping key
+		// generalize. Multi-entity binding is future work tracked in
+		// the U4 backport plan.
 		r.queryEntities = ents
 		teaches = append(teaches, r)
 	}
@@ -147,7 +149,14 @@ func Extract(db *sql.DB) (int, error) {
 	// shape; the grouping key is the looser join.
 	groups := map[groupKey][]teachRow{}
 	for _, t := range teaches {
-		structural := queryStructural(t.queryPattern, t.queryEntities[0])
+		// Strip every entity token (not just queryEntities[0]) so the
+		// structural form is invariant to entity count. A multi-entity
+		// row about "$HOME vs $AWAY tonight" must collapse to the same
+		// stem as the single-entity rows in its bucket so grouping
+		// can find them together; the anyMulti guard below ensures we
+		// still don't synthesize a single-slot template from a multi-
+		// entity row.
+		structural := queryStructural(t.queryPattern, t.queryEntities)
 		// A row whose query_pattern collapses to nothing once entities
 		// are stripped has no meaningful content to template against;
 		// the resulting recipe would over-match every future cold
@@ -187,6 +196,25 @@ func Extract(db *sql.DB) (int, error) {
 		// just a single learning; templating it would create wild
 		// inferences from any user's first-ever taught row.
 		if len(members) < 2 {
+			continue
+		}
+
+		// Multi-entity members fall through to grouping (so the
+		// structural form generalizes correctly) but skip inference
+		// here: tryExactBinding / tryPrefixBinding both index
+		// queryEntities[0] only. Emitting a single-slot template
+		// against a multi-entity row would synthesize a wrong pattern
+		// (the second entity would be baked into prefix/suffix as a
+		// literal). Multi-entity binding is future work; for now we
+		// only infer when every group member is single-entity.
+		anyMulti := false
+		for _, m := range members {
+			if len(m.queryEntities) > 1 {
+				anyMulti = true
+				break
+			}
+		}
+		if anyMulti {
 			continue
 		}
 
@@ -248,7 +276,7 @@ func inferRecipe(db *sql.DB, key groupKey, members []teachRow) (Recipe, bool) {
 		// + suffix where prefix/suffix come from the shared template.
 		if tmpl, ok := tryExactBinding(db, kind, members); ok {
 			return Recipe{
-				QueryTemplate:    buildQueryTemplate(key.queryPattern, members[0].queryEntities[0]),
+				QueryTemplate:    buildQueryTemplate(key.queryPattern, members[0].queryEntities),
 				ResourceTemplate: tmpl,
 				ResourceType:     key.resourceType,
 				Venue:            key.venue,
@@ -266,7 +294,7 @@ func inferRecipe(db *sql.DB, key groupKey, members []teachRow) (Recipe, bool) {
 		// the entity as the unpredictable trailing segment.
 		if tmpl, ok := tryPrefixBinding(db, kind, members); ok {
 			return Recipe{
-				QueryTemplate:    buildQueryTemplate(key.queryPattern, members[0].queryEntities[0]),
+				QueryTemplate:    buildQueryTemplate(key.queryPattern, members[0].queryEntities),
 				ResourceTemplate: tmpl,
 				ResourceType:     key.resourceType,
 				Venue:            key.venue,
@@ -445,22 +473,32 @@ func isFullyShared(sharedSuffix, suffixFirst string, members []teachRow, values 
 	return true
 }
 
-// queryStructural returns the row's query_pattern with the
-// lowercased entity token removed so two rows that differ only in
-// their entity (e.g., "portugal wins world cup" and "usa wins world
-// cup") group together under the shared stem "wins world cup".
+// queryStructural strips every stored entity from queryPattern and
+// returns the alphabetized non-entity token form so two rows that
+// differ only in their entity (e.g., "portugal wins world cup" and
+// "usa wins world cup") group together under the shared stem "wins
+// world cup". Multi-entity queries have all entities stripped:
+// single-entity-only stripping previously blocked pattern emergence
+// whenever a row's queryEntities held more than one element (the
+// second entity stayed in the structural form as a literal and
+// split otherwise-identical-shape rows into singleton groups).
 // Tokens are re-sorted to keep the structural key stable across
 // arbitrary entity insertion positions.
 //
-// Returns the empty string when stripping the entity would leave
+// Returns the empty string when stripping the entities would leave
 // no content tokens behind (a degenerate row whose query was just
-// the entity itself; nothing to template against).
-func queryStructural(queryPattern, entity string) string {
+// the entity(s) themselves; nothing to template against).
+func queryStructural(queryPattern string, entitiesToStrip []string) string {
 	tokens := strings.Fields(queryPattern)
-	ent := strings.ToLower(strings.TrimSpace(entity))
+	skip := make(map[string]struct{}, len(entitiesToStrip))
+	for _, e := range entitiesToStrip {
+		if v := strings.ToLower(strings.TrimSpace(e)); v != "" {
+			skip[v] = struct{}{}
+		}
+	}
 	kept := make([]string, 0, len(tokens))
 	for _, t := range tokens {
-		if strings.ToLower(t) == ent {
+		if _, drop := skip[strings.ToLower(t)]; drop {
 			continue
 		}
 		kept = append(kept, t)
@@ -473,14 +511,18 @@ func queryStructural(queryPattern, entity string) string {
 // into search_recipes.query_template. The template carries the
 // shared non-entity tokens (from the row's structural form) plus
 // a single "{entity}" placeholder, all re-sorted for byte stability.
+// Multi-entity rows are excluded upstream via the anyMulti guard in
+// Extract so this stays a valid single-slot template even though it
+// accepts a full entity slice (every entity gets stripped from the
+// stem, then exactly one {entity} placeholder appended).
 //
 // Why re-sort: the Apply path token-set Jaccards the live query's
 // non-entity tokens against this template's non-entity tokens, and
 // the recall path already sorts its non-entity tokens lexically
 // (see normalize.NonEntityNormalized). Matching sort orders keeps
 // the Jaccard symmetric.
-func buildQueryTemplate(queryPattern, entity string) string {
-	structural := queryStructural(queryPattern, entity)
+func buildQueryTemplate(queryPattern string, entitiesToStrip []string) string {
+	structural := queryStructural(queryPattern, entitiesToStrip)
 	tokens := strings.Fields(structural)
 	tokens = append(tokens, "{entity}")
 	sort.Strings(tokens)
