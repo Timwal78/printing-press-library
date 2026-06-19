@@ -13,6 +13,9 @@ on:
       - 'library/**/manifest.json'
       - '.github/scripts/verify-manifest/**'
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     name: Validate MCPB manifest contract

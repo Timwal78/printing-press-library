@@ -595,6 +595,102 @@ class NpmLifecycleSignalTest(unittest.TestCase):
         self.assertEqual(findings, [])
 
 
+class UnpinnedActionRefSignalTest(unittest.TestCase):
+    """R7 — advisory signal for non-SHA-pinned action references."""
+
+    def _wf(self, uses_line: str) -> str:
+        return (
+            "on: push\n"
+            "jobs:\n"
+            "  x:\n"
+            "    runs-on: ubuntu-latest\n"
+            "    steps:\n"
+            f"      - uses: {uses_line}\n"
+        )
+
+    def test_version_tag_ref_advises(self) -> None:
+        wf = self._wf("actions/checkout@v4")
+        findings = signals.signal_unpinned_action_ref(
+            _fc(".github/workflows/ci.yml", head=wf)
+        )
+        self.assertEqual(len(findings), 1)
+        self.assertFalse(findings[0].is_block())
+        self.assertEqual(findings[0].severity, "advise")
+        self.assertEqual(findings[0].signal_id, "unpinned_action_ref")
+
+    def test_main_ref_advises(self) -> None:
+        wf = self._wf("actions/checkout@main")
+        findings = signals.signal_unpinned_action_ref(
+            _fc(".github/workflows/ci.yml", head=wf)
+        )
+        self.assertEqual(len(findings), 1)
+        self.assertFalse(findings[0].is_block())
+
+    def test_latest_ref_advises(self) -> None:
+        wf = self._wf("actions/setup-node@latest")
+        findings = signals.signal_unpinned_action_ref(
+            _fc(".github/workflows/ci.yml", head=wf)
+        )
+        self.assertEqual(len(findings), 1)
+
+    def test_sha_pinned_ref_does_not_fire(self) -> None:
+        sha = "11bd71901bbe5b1630ceea73d27597364c9af683"
+        wf = self._wf(f"actions/checkout@{sha}  # v4.2.2")
+        findings = signals.signal_unpinned_action_ref(
+            _fc(".github/workflows/ci.yml", head=wf)
+        )
+        self.assertEqual(findings, [])
+
+    def test_in_repo_workflow_ref_not_flagged(self) -> None:
+        """Reusable in-repo workflow (.github/workflows/foo.yml) is trusted."""
+        wf = (
+            "on: push\n"
+            "jobs:\n"
+            "  x:\n"
+            "    uses: .github/workflows/reusable.yml\n"
+        )
+        findings = signals.signal_unpinned_action_ref(
+            _fc(".github/workflows/ci.yml", head=wf)
+        )
+        self.assertEqual(findings, [])
+
+    def test_non_workflow_file_not_flagged(self) -> None:
+        wf = self._wf("actions/checkout@v4")
+        findings = signals.signal_unpinned_action_ref(
+            _fc("library/x/foo/some.go", head=wf)
+        )
+        self.assertEqual(findings, [])
+
+    def test_preexisting_unpinned_ref_not_re_flagged(self) -> None:
+        """Diff-awareness: an unpinned ref already present on base should not
+        fire again when head content is identical."""
+        wf = self._wf("actions/checkout@v4")
+        findings = signals.signal_unpinned_action_ref(
+            _fc(".github/workflows/ci.yml", base=wf, head=wf)
+        )
+        self.assertEqual(findings, [])
+
+    def test_new_unpinned_ref_fires_when_base_had_different_ref(self) -> None:
+        """Adding a second unpinned action in a PR that already had one should
+        flag only the newly added one."""
+        base = self._wf("actions/checkout@v4")
+        head = (
+            "on: push\n"
+            "jobs:\n"
+            "  x:\n"
+            "    runs-on: ubuntu-latest\n"
+            "    steps:\n"
+            "      - uses: actions/checkout@v4\n"
+            "      - uses: actions/setup-go@v5\n"
+        )
+        findings = signals.signal_unpinned_action_ref(
+            _fc(".github/workflows/ci.yml", base=base, head=head)
+        )
+        # Only the newly added setup-go@v5 should fire.
+        self.assertEqual(len(findings), 1)
+        self.assertIn("setup-go", findings[0].message)
+
+
 class ModulePathDriftSignalTest(unittest.TestCase):
     PREFIX = "github.com/mvanhorn/printing-press-library/library/"
 
@@ -867,6 +963,47 @@ class ScanIntegrationTest(unittest.TestCase):
         self.assertEqual(rc, 0)
         rc = self._run_scan(base="main", strict=True)
         self.assertEqual(rc, 1)
+
+    def test_unpinned_action_advises_only(self) -> None:
+        """R7 end-to-end: adding an unpinned action ref emits advisory (exit 0)."""
+        self._write(".github/workflows/baseline.yml", "on: push\n")
+        self._commit("baseline")
+        self._git("checkout", "-q", "-b", "feat/x")
+        self._write(
+            ".github/workflows/baseline.yml",
+            "on: push\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n",
+        )
+        self._commit("add unpinned checkout")
+        rc = self._run_scan(base="main", strict=False)
+        # Advisory only — must not block.
+        self.assertEqual(rc, 0)
+
+    def test_unpinned_action_promoted_to_block_in_strict(self) -> None:
+        """R7 strict mode: advisory unpinned ref becomes a block finding."""
+        self._write(".github/workflows/baseline.yml", "on: push\n")
+        self._commit("baseline")
+        self._git("checkout", "-q", "-b", "feat/x")
+        self._write(
+            ".github/workflows/baseline.yml",
+            "on: push\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n",
+        )
+        self._commit("add unpinned checkout")
+        rc = self._run_scan(base="main", strict=True)
+        self.assertEqual(rc, 1)
+
+    def test_sha_pinned_action_passes_strict(self) -> None:
+        """R7: a SHA-pinned action must pass even in strict mode."""
+        sha = "11bd71901bbe5b1630ceea73d27597364c9af683"
+        self._write(".github/workflows/baseline.yml", "on: push\n")
+        self._commit("baseline")
+        self._git("checkout", "-q", "-b", "feat/x")
+        self._write(
+            ".github/workflows/baseline.yml",
+            f"on: push\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@{sha}  # v4\n",
+        )
+        self._commit("add sha-pinned checkout")
+        rc = self._run_scan(base="main", strict=True)
+        self.assertEqual(rc, 0)
 
 
 if __name__ == "__main__":
