@@ -720,6 +720,116 @@ def signal_module_path_drift(change: FileChange) -> list[Finding]:
 
 
 # ---------------------------------------------------------------------------
+# R7: unpinned GitHub Actions references in workflows
+# ---------------------------------------------------------------------------
+
+# Matches `uses: owner/action@<ref>` where <ref> is NOT a 40-hex-char commit SHA.
+# Advisory only — this is not yet a mechanical block gate, but surfaces for
+# review. SHA-pinned references look like:
+#   uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
+# Unpinned references use mutable tags:
+#   uses: actions/checkout@v4    (version tag — can be moved by upstream)
+#   uses: actions/checkout@main  (branch ref — changes on every push)
+#   uses: actions/checkout@latest
+_USES_LINE = re.compile(
+    r"^\s+uses:\s+"
+    r"(?P<action>[a-zA-Z0-9_.-]+/[a-zA-Z0-9_./.-]+)"
+    r"@(?P<ref>[^\s#]+)"
+)
+_SHA_REF = re.compile(r"^[0-9a-f]{40}$")
+
+
+def _walk_unpinned_uses(parsed: Any) -> list[tuple[str, str]]:
+    """Return [(action, ref)] for every non-SHA-pinned `uses:` step in the
+    parsed workflow. Inspects every job's steps and every matrix include."""
+    if not isinstance(parsed, dict):
+        return []
+    jobs = parsed.get("jobs")
+    if not isinstance(jobs, dict):
+        return []
+    found: list[tuple[str, str]] = []
+    for job in jobs.values():
+        if not isinstance(job, dict):
+            continue
+        steps = job.get("steps")
+        if not isinstance(steps, list):
+            continue
+        for step in steps:
+            if not isinstance(step, dict):
+                continue
+            uses = step.get("uses")
+            if not isinstance(uses, str):
+                continue
+            # Reusable-workflow calls (.github/workflows/...) are in-repo and
+            # therefore trusted; only flag third-party actions.
+            if uses.startswith(".github/") or uses.startswith("./"):
+                continue
+            at = uses.rfind("@")
+            if at == -1:
+                continue
+            ref = uses[at + 1:]
+            if not _SHA_REF.match(ref):
+                found.append((uses[:at], ref))
+    return found
+
+
+def signal_unpinned_action_ref(change: FileChange) -> list[Finding]:
+    """R7. GitHub Action `uses:` references pinned to a mutable tag (@v4,
+    @main, @latest) rather than a 40-hex commit SHA. If the upstream action
+    repository is compromised, the mutable tag can be repointed at a malicious
+    commit without any change to this repo — every runner that triggers the
+    workflow will silently run the attacker's code.
+
+    Advisory only: this is a best-practice gap rather than an active attack
+    shape already observed in this catalog. Run with --strict to promote to
+    block-severity.
+
+    Structural diff: fires for each newly-introduced unpinned ref in head
+    that was not already present in base at the same action/ref combination.
+    """
+    if not is_workflow(change.path) or change.head_content is None:
+        return []
+
+    head = _parse_workflow(change.head_content)
+    head_unpinned = set(_walk_unpinned_uses(head))
+    if not head_unpinned:
+        return []
+
+    base = _parse_workflow(change.base_content)
+    base_unpinned: set[tuple[str, str]] = set(_walk_unpinned_uses(base)) if base else set()
+
+    new_unpinned = head_unpinned - base_unpinned
+    if not new_unpinned:
+        return []
+
+    findings: list[Finding] = []
+    for action, ref in sorted(new_unpinned):
+        needle = f"{action}@{ref}"
+        line = _find_line_in(change.head_content, needle)
+        findings.append(
+            Finding(
+                path=change.path,
+                line=line,
+                severity="advise",
+                signal_id="unpinned_action_ref",
+                message=(
+                    "Action %s@%s is pinned to a mutable ref. If the upstream "
+                    "action repo is compromised, the tag can be silently repointed "
+                    "at malicious code. Pin to the 40-hex commit SHA instead, "
+                    "keeping the tag as a comment for readability." % (action, ref)
+                ),
+                remediation=(
+                    "Replace `uses: %s@%s` with "
+                    "`uses: %s@<40-hex-sha>  # %s` "
+                    "(run `gh api repos/%s/git/refs/tags/%s` or look up the "
+                    "SHA on the action's releases page)." % (action, ref, action, ref, action, ref)
+                ),
+            )
+        )
+    return findings
+
+
+# ---------------------------------------------------------------------------
 # Signal dispatch
 # ---------------------------------------------------------------------------
 
@@ -731,6 +841,7 @@ ALL_SIGNALS = (
     signal_go_env_override,
     signal_npm_lifecycle_script,
     signal_module_path_drift,
+    signal_unpinned_action_ref,
 )
 
 
