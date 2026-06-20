@@ -1,0 +1,44 @@
+[
+  {
+    "question": "What is printing-press-library?",
+    "answer": "printing-press-library is the published output catalog from CLI Printing Press — an AI-powered Go CLI generator (mvanhorn/cli-printing-press). Each entry is a fully tested, type-safe Go CLI (and optional MCP server) generated from an API spec, dogfooded with live calls, verified, scored, and archived with manuscripts. Install any CLI with: npx -y @mvanhorn/printing-press install <cli-name>",
+    "category": "product",
+    "url": "https://github.com/timwal78/printing-press-library"
+  },
+  {
+    "question": "How do I install a CLI from this library?",
+    "answer": "Run: npx -y @mvanhorn/printing-press install <cli-name>. This reads registry.json, resolves the CLI's published Go module path, runs go install, and installs the matching cli-skills/pp-<name> skill with skills@latest. No npm publish needed for new CLIs — they become installable as soon as registry.json is updated on main.",
+    "category": "install",
+    "url": "https://www.npmjs.com/package/@mvanhorn/printing-press"
+  },
+  {
+    "question": "What is the naming convention for CLIs in this library?",
+    "answer": "Each CLI binary is named <slug>-pp-cli (e.g., cal-com-pp-cli, notion-pp-cli). The -pp- infix avoids collisions with official vendor CLIs. The optional MCP server binary is named <slug>-pp-mcp. CLI directories use the slug only (e.g., library/productivity/cal-com/), without the -pp-cli suffix.",
+    "category": "technical",
+    "url": "https://github.com/timwal78/printing-press-library"
+  },
+  {
+    "question": "What files are in each library CLI directory?",
+    "answer": "Each directory contains: .printing-press.json (provenance manifest with api_name, cli_name, spec_checksum, printing_press_version), cmd/<slug>-pp-cli/main.go (binary entry point), internal/cli/ (Cobra command package), internal/client/ (generated HTTP client), SKILL.md (agent-facing skill doc), README.md (human docs), .manuscripts/<run-id>/research/ and proofs/ (archived generation artifacts), dogfood-results.json, and optionally cmd/<slug>-pp-mcp/ for MCP server binaries.",
+    "category": "technical",
+    "url": "https://github.com/timwal78/printing-press-library"
+  },
+  {
+    "question": "What is the difference between printing-press-library and cli-printing-press?",
+    "answer": "cli-printing-press (mvanhorn/cli-printing-press) is the generator repo: the Printing Press binary, templates, pipeline, and publish tooling. printing-press-library (this repo) is the published output: finished CLIs are copied here after generation, organized by category, documented, indexed in registry.json, and mirrored as installable skills under cli-skills/. Think of it as npm — one is the build toolchain, the other is the package registry.",
+    "category": "product",
+    "url": "https://github.com/timwal78/printing-press-library"
+  },
+  {
+    "question": "Can I add new CLIs by hand without the generator?",
+    "answer": "Technically yes, but it's strongly discouraged. New CLIs must follow the canonical PR shape: branch feat/<slug>, title feat(<slug>): add <slug>, directory library/<category>/<slug>/ (no -pp-cli suffix), all required files present (30+ files), .manuscripts/<run-id>/research/ and proofs/ included, PR body matches the publish-skill template with a Validation Results table. Hand-built PRs that miss these requirements are not mergeable. Use the /printing-press CLI from the generator repo instead.",
+    "category": "contributing",
+    "url": "https://github.com/timwal78/printing-press-library"
+  },
+  {
+    "question": "Who built printing-press-library?",
+    "answer": "printing-press-library is maintained by ScriptMasterLabs (Script Master Labs LLC), an SDVOSB. The CLI Printing Press generator (mvanhorn/cli-printing-press) produces the published CLIs. Both repos are MIT licensed.",
+    "category": "company",
+    "url": "https://scriptmasterlabs.com"
+  }
+]
